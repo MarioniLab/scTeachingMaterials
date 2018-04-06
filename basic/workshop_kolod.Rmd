@@ -100,7 +100,7 @@ sce <- SingleCellExperiment(list(counts=as.matrix(count.data)),
 sce    
 ```
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:** 
 
 ```{r, eval=FALSE}
@@ -145,7 +145,7 @@ rowData(sce) <- anno
 rowData(sce)
 ```
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
 ```{r, eval=FALSE}
@@ -171,7 +171,7 @@ isSpike(sce, "ERCC") <- is.spike
 sce
 ```
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
 ```{r, eval=FALSE}
@@ -223,7 +223,7 @@ sce <- calculateQCMetrics(sce, feature_controls=list(
 head(colnames(colData(sce)))
 ```
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
 ```{r, eval=FALSE}
@@ -256,7 +256,7 @@ low.nfeatures <- isOutlier(sce$total_features, log=TRUE, nmads=3, type="lower", 
 high.ercc <- isOutlier(sce$pct_counts_ERCC, nmads=3, type="higher", batch=sce$Culture)
 ```
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
 ```{r, eval=FALSE}
@@ -314,10 +314,10 @@ Cells are classified as being in G1 phase if the G1 score is above 0.5 and great
     and in S phase if neither score is above 0.5.
 It seems that most cells here are in the S phase.
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
-```{r}
+```{r, eval=FALSE}
 # How do we figure out the specific calls?
 assignments
 ```
@@ -379,7 +379,7 @@ sce <- computeSumFactors(sce, min.mean=1)
 summary(sizeFactors(sce))
 ```
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
 It's a good idea to plot the size factors against the library sizes as a sanity check.
@@ -409,7 +409,7 @@ These size factors are stored in a separate field of the `SingleCellExperiment` 
 This ensures that they will only be used with the spike-in transcripts but not the endogenous genes.
 Note that if you _do_ want to use the spike-in size factors to normalize all genes, set `general.use=TRUE` instead.
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
 The two sets of size factors tend to agree less due to the effects of heterogeneity in total RNA content between cells - this is expected.
@@ -433,7 +433,7 @@ sce <- normalize(sce)
 The log-transformation provides some measure of variance stabilization, so that high-abundance genes with large variances do not dominate downstream analyses.
 The computed values are stored as an `logcounts` matrix in addition to the other assay elements.
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
 ```{r, eval=FALSE}
@@ -486,7 +486,7 @@ write.table(file="hvg.tsv", hvg.out, sep="\t", quote=FALSE, col.names=NA)
 head(hvg.out)
 ```
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
 It's wise to check the distribution of expression values for the top HVGs to ensure that the variance estimate is not being dominated by one or two outlier cells.
@@ -518,7 +518,7 @@ We can have a look at the PCs directly, with pairwise plots between the first fo
 plotPCA(sce, ndim=3, colour_by="Culture")
 ```
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
 What if we want to look at the proportion of variance explained by each PC?
@@ -555,7 +555,7 @@ my.clusters <- cutree(my.tree, k=3)
 table(my.clusters, sce$Culture)
 ```
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
 How do I make a _t_-SNE plot coloured by cluster?
@@ -620,7 +620,7 @@ marker.set <- out[[2]] # Marker set for cluster 2
 head(marker.set)
 ```
 
-<div class="alert alert-info">
+<div class="alert alert-warning">
 **Exercise:**
 
 What does this represent?
