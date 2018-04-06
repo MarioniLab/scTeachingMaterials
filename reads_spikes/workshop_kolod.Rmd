@@ -1,0 +1,512 @@
+---
+title: A simple analysis of single-cell RNA seq data with Bioconductor packages
+author: Aaron Lun  
+date: 23 October 2017 
+output: 
+  BiocStyle::html_document:
+    fig_caption: false
+---
+
+```{r style, echo=FALSE, results='hide', message=FALSE}
+library(BiocStyle)
+library(knitr)
+opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+opts_chunk$set(fig.width=7, fig.height=7)
+#options(bitmapType="cairo", width=100) # if transparencies don't work on your machine.
+```
+
+# Introduction
+
+This practical will perform some of the initial steps in a basic scRNA-seq data analysis. 
+It will start from a count matrix and proceed through:
+
+- Quality control on the cells
+- Cell cycle phase assignment
+- Normalization for cell-specific biases
+- Modelling technical noise
+- Dimensionality reduction
+- Some visualization and clustering
+- Differential gene detection
+
+This will use R version 3.4.0 or higher, with a number of Bioconductor packages.
+If you haven't downloaded and installed them already, you can do so by running the code below.
+This only needs to be done once - the packages will be on your computer once installed, and can be loaded with `library`.
+
+```{r, eval=FALSE}
+source("https://bioconductor.org/biocLite.R")
+biocLite(c("knitr", "BiocStyle", "org.Mm.eg.db", "scater", "Rtsne", 
+           "TxDb.Mmusculus.UCSC.mm10.ensGene", "scran", "pheatmap"))
+```
+
+**Note:** The next package release will involve a change in the underlying class, from `SCESet` to the more modern `SingleCellExperiment`.
+In general, this should just involve a change in how you construct the initial `sce` object, and how you set the spike-ins.
+
+# Loading in data 
+
+To demonstrate, we'll use a subset of the data from a study of mouse embryonic stem cells (mESCs).
+These mESCs were cultured under various conditions - 2i (ground state), lif (serum) and a2i (alternative ground state).
+A more detailed description of the study is available at http://www.ebi.ac.uk/teichmann-srv/espresso/.
+
+<!--
+To keep things simple, I've only taken only cells in the single batch that contains spike-in transcripts.
+The code involved in obtaining this subset is shown below.
+
+```{r, eval=FALSE}
+incoming <- read.table("counttable_es.csv", header=TRUE, row.names=1)
+cell.type <- sub("^ola_mES_(.*)_[0-9]+_[0-9]+.counts$", "\\1", colnames(incoming))
+batch.num <- sub("^ola_mES_.*_([0-9]+)_[0-9]+.counts$", "\\1", colnames(incoming))
+keep <- batch.num == "3"
+write.csv(file="es_data.csv", incoming[,keep], row.names=TRUE)
+write.csv(file="metadata.csv", data.frame(Sample=colnames(incoming), Culture=cell.type, Batch=batch.num)[keep,], row.names=FALSE)
+system("gzip es_data.czv")
+```
+-->
+
+Our first task is to read in the counts and the associated metadata.
+Here, both files are stored in the CSV format so we can just use the `read.csv` command.
+(The `.gz` suffix just indicates that it is compressed, which is automatically handled by `read.csv`.)
+
+```{r}
+# download.file(..., "es_data.csv.gz")
+count.data <- read.csv("es_data.csv.gz", header=TRUE, row.names=1)
+head(count.data[,1:10])
+```
+
+The original study used _HTSeq_ to assign reads to genes to obtain gene counts in each cell.
+It's worth pointing out that _HTSeq_ puts some gunk at the end of the count matrix, e.g., number of unassigned reads.
+We throw these out because they're not counts for actual genes.
+
+```{r}
+tail(count.data[,1:10])
+count.data <- count.data[!grepl("_", rownames(count.data)),]
+```
+
+It's a good idea to check that the metadata actually matches up with the count data.
+The `match` command below ensures that the ordering of metadata rows are the same as the ordering of count columns.
+
+```{r}
+metadata <- read.csv("metadata.csv", header=TRUE, row.names=1)
+metadata <- metadata[match(colnames(count.data), rownames(metadata)),]
+head(metadata)
+```
+
+We pull out annotation from `r Biocpkg("org.Mm.eg.db")` to relate the ENSEMBL identifiers to the gene symbols.
+The `mapIds` call just ensures that only one gene symbol is used if two symbols map to the same Ensembl ID.
+
+```{r}
+library(org.Mm.eg.db)
+my.ids <- rownames(count.data)
+symbols <- mapIds(org.Mm.eg.db, keys=my.ids, keytype="ENSEMBL", column="SYMBOL")
+anno <- data.frame(ENSEMBL=my.ids, SYMBOL=symbols, stringsAsFactors=FALSE)
+head(anno)
+```
+
+All of this information can be used to assemble an `SCESet` object with the `r Biocpkg("scater")` package.
+
+```{r}
+library(scater)
+sce <- newSCESet(countData=count.data, phenoData=AnnotatedDataFrame(metadata),
+                 featureData=AnnotatedDataFrame(anno))
+```
+
+To identify which rows correspond to mitochondrial genes, we need to use extra annotation describing the genomic location of each gene.
+For Ensembl, this involves using the `r Biocpkg("TxDb.Mmusculus.UCSC.mm10.ensGene")` package.
+
+```{r}
+library(TxDb.Mmusculus.UCSC.mm10.ensGene)
+location <- select(TxDb.Mmusculus.UCSC.mm10.ensGene, keys=my.ids, 
+                   column="CDSCHROM", keytype="GENEID")
+location <- location[match(my.ids, location$GENEID),]
+is.mito <- location$CDSCHROM == "chrM" & !is.na(location$CDSCHROM)
+sum(is.mito)
+```
+
+Identification of rows that correspond to spike-in transcripts is much easier, given that the ERCC spike-ins were used.
+(If you're doing this on the gene symbols, beware of the human gene family that also starts with "ERCC".)
+
+```{r}
+is.spike <- grepl("^ERCC", my.ids)
+sum(is.spike)
+```
+
+For each cell, we calculate quality control metrics such as the total number of counts or the proportion of counts in mitochondrial genes or spike-in transcripts.
+These are stored in the `pData` of the `SCESet` for future reference.
+
+```{r}
+sce <- calculateQCMetrics(sce, feature_controls=list(ERCC=is.spike, Mt=is.mito))
+head(colnames(pData(sce)))
+```
+
+We need to explicitly indicate that the ERCC set is, in fact, a spike-in set.
+This is necessary as spike-ins require special treatment in some downstream steps such as variance estimation and normalization.
+We do this by supplying the name of the spike-in set, as shown below.
+(Note that, in the next release, this call will change slightly to `isSpike(sce, "ERCC") <- is.spike`.)
+
+```{r}
+setSpike(sce) <- "ERCC"
+```
+
+To make things easier to interpret, we'll use the gene symbols as row names.
+This requires some fiddling to avoid non-unique gene symbols (in which case we paste the Ensembl ID after it) or missing gene symbols (in which case we use the Ensembl ID).
+
+```{r}
+new.names <- fData(sce)$SYMBOL
+missing.name <- is.na(new.names)
+new.names[missing.name] <- fData(sce)$ENSEMBL[missing.name]
+dup.name <- new.names %in% new.names[duplicated(new.names)]
+new.names[dup.name] <- paste0(new.names, "_", fData(sce)$ENSEMBL)[dup.name]
+rownames(sce) <- new.names
+```
+
+## Quality control on the cells 
+
+We need to remove low-quality cells to ensure that technical effects do not distort downstream analyses.
+We have a number of simple metrics that we use to assess quality:
+
+- Library size 
+- Number of expressed features
+- Proportion of spike-in reads
+- Proportion of mitochondrial reads (if spike-ins are not available)
+
+Together, these catch failures in cDNA capture or sequencing, especially for the endogenous transcripts.
+We create plots of these statistics below for each culture condition.
+
+```{r qualplot, fig.height=10, fig.width=10}
+multiplot(cols=2,
+    plotPhenoData(sce, aesth=aes_string(x="Culture", y="log10_total_counts")),
+    plotPhenoData(sce, aesth=aes_string(x="Culture", y="total_features")),
+    plotPhenoData(sce, aesth=aes_string(x="Culture", y="pct_counts_feature_controls_ERCC")),
+    plotPhenoData(sce, aesth=aes_string(x="Culture", y="pct_counts_feature_controls_Mt"))
+    )
+```
+
+We assume that most cells are of high quality, and we remove cells with outlier values for each of the QC metrics.
+This is done using the `isOutlier` function, which defines outliers based on some number of MADs from the median value.
+Of course, this involves some assumptions about independence from biology. 
+(For example, don't use the mitochondrial proportions if the number/activity of mitochondria changes between cell types.)
+
+```{r}
+low.lib <- isOutlier(sce$total_counts, log=TRUE, nmads=3, type="lower", batch=sce$Culture) # using log-values, here.
+low.nfeatures <- isOutlier(sce$total_features, log=TRUE, nmads=3, type="lower", batch=sce$Culture)
+high.ercc <- isOutlier(sce$pct_counts_feature_controls_ERCC, nmads=3, type="higher", batch=sce$Culture)
+discard <- low.lib | low.nfeatures | high.ercc
+data.frame(LowLib=sum(low.lib), LowNgenes=sum(low.nfeatures), HighSpike=sum(high.ercc), 
+           TotalLost=sum(discard), TotalLeft=sum(!discard))
+```
+
+We toss out the cells that we consider to be low-quality, and keep the rest.
+Here, most cells are retained (which makes sense, as some QC was already applied to the published data).
+
+```{r}
+sce <- sce[,!discard]
+```
+
+Of course, more sophisticated QC procedures can be used, e.g., `r Biocpkg("cellity")`.
+We stick to the simple stuff because it's easier to interpret and trouble-shoot.
+
+# Classification of cell cycle phase 
+
+We use the `cyclone` method to classify cells into different cell cycle phases (http://dx.doi.org/10.1016/j.ymeth.2015.06.021).
+This was previously trained on some mouse data with known cell cycle classifications - we can get the trained classifier with `mm.pairs`.
+The method uses a randomization step, so use `set.seed` to obtain consistent results from different runs.
+
+```{r phaseplothsc}
+library(scran)
+set.seed(100)
+mm.pairs <- readRDS(system.file("exdata", "mouse_cycle_markers.rds", package="scran"))
+assignments <- cyclone(sce, mm.pairs, gene.names=fData(sce)$ENSEMBL)
+plot(assignments$score$G1, assignments$score$G2M, xlab="G1 score", ylab="G2/M score", pch=16)
+```
+
+Cells are classified as being in G1 phase if the G1 score is above 0.5 and greater than the G2/M score; 
+    in G2/M phase if the G2/M score is above 0.5 and greater than the G1 score; 
+    and in S phase if neither score is above 0.5.
+It seems that most cells here are in the S phase.
+
+```{r}
+table(assignments$phases)
+```
+
+We store the cell cycle phases for future use, e.g., to check whether any downstream results are driven by cell cycle effects.
+Phase assignment is difficult so I generally don't use the assignments for anything more than diagnostics.
+
+```{r}
+sce$cycle_phase <- assignments$phases
+```
+
+# Checking out the genes
+
+We inspect the distribution of log-mean counts across all genes.
+The peak represents the bulk of moderately expressed genes while the rectangular component corresponds to lowly expressed genes.
+
+```{r abhisthsc}
+ave.counts <- calcAverage(sce)
+hist(log10(ave.counts), breaks=100, main="", col="grey80",
+    xlab=expression(Log[10]~"average count"))
+```
+
+We also look at the identities of the most highly expressed genes.
+This should generally be dominated by constitutively expressed transcripts, such as those for ribosomal or mitochondrial proteins.
+The presence of other classes of features may be cause for concern if they are not consistent with expected biology.
+
+```{r topgenehsc}
+plotQC(sce, type = "highest-expression", n=50)
+```
+
+We can also have a look at the number of cells expressing each gene. 
+This is usually well-correlated to the average expression of each gene.
+
+```{r}
+numcells <- nexprs(sce, byrow=TRUE)
+smoothScatter(log2(ave.counts), numcells, xlab="Log2-Average count", 
+    ylab="Number of expressing cells")
+```
+
+We discard genes that are not expressed in any cell, as these are obviously uninformative.
+
+```{r}
+sce <- sce[numcells > 0,]
+summary(numcells > 0)
+```
+
+# Normalization of cell-specific biases
+
+## For the endogenous genes
+
+We apply the deconvolution method (https://dx.doi.org/10.1186/s13059-016-0947-7) to eliminate biases in the counts for the endogenous transcripts.
+This computes size factors for each cell representing the scaling bias in the counts.
+Some filtering is required to remove low-abundance genes prior to normalization (this will be done automatically in the next release).
+
+```{r}
+sce <- computeSumFactors(sce, subset.row=calcAverage(sce) >= 1)
+summary(sizeFactors(sce))
+```
+
+__Note:__ For highly heterogeneous data sets with multiple cell types, we should cluster first with `quickCluster`, and then normalize within each cluster.
+This avoids trying to pool very different cells together during the deconvolution process.
+We don't bother doing this here, as all the cells are mESCs.
+
+It's a good idea to plot the size factors against the library sizes as a sanity check.
+There should be some positive correlation.
+
+```{r normplothsc}
+plot(sizeFactors(sce), sce$total_counts/1e6, log="xy",
+    ylab="Library size (millions)", xlab="Size factor")
+```
+
+## Computing separate size factors for spike-in transcripts
+
+We need to normalize spike-in transcripts separately as they are not subject to all biases affecting endogenous transcripts - in particular, total RNA content.
+Applying the endogenous size factors would over-normalize, so we define separate size factors for the spike-ins.
+This is simply defined for each cell as the total count across all transcripts in the spike-in set.
+
+```{r}
+sce <- computeSpikeFactors(sce, type="ERCC", general.use=FALSE)
+```
+
+These size factors are stored in a separate field of the `SCESet` object by setting `general.use=FALSE` in `computeSpikeFactors`.
+This ensures that they will only be used with the spike-in transcripts but not the endogenous genes.
+The two sets of size factors tend to agree less due to the effects of heterogeneity in total RNA content between cells.
+
+```{r spikeplot}
+plot(sizeFactors(sce), sizeFactors(sce, type="ERCC"), log="xy",
+     xlab="Size factor (ERCC)", ylab="Size factor (genes)")
+```
+
+Note that if you _do_ want to use the spike-in size factors to normalize all genes, set `general.use=TRUE` instead.
+
+## Applying the size factors to normalize gene expression
+
+Counts are transformed into normalized log-expression values for use in downstream analyses.
+Each value is defined as the log-ratio of each count to the size factor for the corresponding cell, after adding a pseudo-count of 1 to avoid undefined values at zero counts.
+Division of the counts for each gene by its appropriate size factor ensures that any cell-specific biases are removed.
+
+```{r}
+sce <- normalize(sce)
+```
+
+The log-transformation provides some measure of variance stabilization, so that high-abundance genes with large variances do not dominate downstream analyses.
+The computed values are stored as an `exprs` matrix in addition to the other assay elements.
+
+# Checking for important technical factors 
+
+We have a look at the percentage of variance explained by various biological and technical factors.
+We use the spike-in coverage as a proxy for technical factors like capture efficiency and sequencing depth.
+
+```{r explvarplothsc}
+plotExplanatoryVariables(sce, variables=c("counts_feature_controls_ERCC", 
+    "log10_counts_feature_controls_ERCC", "Culture")) 
+```
+
+The percentages for the technical factors are generally small (1-3%), indicating that the expression of most genes does not associate with this factor.
+As expected, the culture type contribution is much larger, which makes biological sense.
+
+# Identifying HVGs from the normalized log-expression 
+
+We identify HVGs to focus on the genes that are driving heterogeneity across the population of cells.
+This requires estimation of the variance in expression for each gene, followed by decomposition of the variance into biological and technical components.
+
+```{r}
+var.fit <- trendVar(sce, trend="loess", span=0.2)
+var.out <- decomposeVar(sce, var.fit)
+```
+
+We can have a look at the fitted trend to the spike-in variances.
+Some tinkering may be required to get a good fit, usually by modifying `trend` or `span`.
+If you don't have spike-ins, you can fit the trend to the variances of the genes with `use.spikes=FALSE` (but this probably overestimates the technical component).
+
+```{r hvgplothsc}
+plot(var.out$mean, var.out$total, pch=16, cex=0.6, xlab="Mean log-expression", 
+    ylab="Variance of log-expression")
+curve(var.fit$trend(x), add=TRUE, col="dodgerblue", lwd=2)
+cur.spike <- isSpike(sce)
+points(var.out$mean[cur.spike], var.out$total[cur.spike], col="red", pch=16)
+```
+
+HVGs are identified as those genes with the highest biological components.
+This avoids prioritizing genes that are highly variable due to technical factors such as sampling noise during RNA capture and library preparation.
+
+```{r}
+hvg.out <- var.out[which(var.out$FDR <= 0.05 & var.out$bio >= 0.5),]
+hvg.out <- hvg.out[order(hvg.out$bio, decreasing=TRUE),] 
+nrow(hvg.out)
+write.table(file="hvg.tsv", hvg.out, sep="\t", quote=FALSE, col.names=NA)
+head(hvg.out)
+```
+
+It's wise to check the distribution of expression values for the top HVGs to ensure that the variance estimate is not being dominated by one or two outlier cells.
+
+```{r hvgvioplothsc}
+plotExpression(sce, rownames(hvg.out)[1:10]) 
+```
+
+An alternative approach is to use `technicalCV2`, which implements the method described by Brennecke _et al._ (http://dx.doi.org/10.1038/nmeth.2645).
+This has some pros and cons compared to the log-variance method described above.
+
+# Dimensionality reduction based on the technical noise 
+
+We use all genes with a positive biological component in `denoisePCA`.
+This performs a principal components analysis on the expression profiles, choosing the number of PCs to retain based on the total technical noise in the data set.
+The idea is to discard later PCs that contain random technical noise, thus enriching for early biological signal (and also reducing work in downstream steps).
+
+```{r}
+sce <- denoisePCA(sce, technical=var.fit$trend, subset.row=var.out$bio > 0)
+pcs <- redDim(sce) # stored in the object
+dim(pcs) # Cells are rows, PCs are columns
+```
+
+We can have a look at the PCs directly, with pairwise plots between the first four PCs.
+(This can be done via `plotPCA` with `use_dimred=` in the next release.)
+
+```{r pcaplothsc, fig.height=10, fig.width=10}
+all.cols <- scater:::.get_palette("tableau10medium")
+culture <- sce$Culture
+par(mfrow=c(4,4), mar=c(4.1, 4.1, 2.1, 2.1))
+for (pc1 in 1:4) { 
+    for (pc2 in 1:4) {
+        plot(pcs[,pc1], pcs[,pc2], col=all.cols[culture],
+             xlab=paste("PC", pc1), ylab=paste("PC", pc2))
+    }
+}
+```
+
+We also use _t_-SNE, which is very good at displaying distinct clusters of cells and resolving complex structure.
+Note that we're running `Rtsne` on PCs already, so there's no need to do another PCA step - hence, `pca=FALSE`.
+(Again, this can be done via `plotTSNE` with `use_dimred=` in the next release.)
+
+```{r tsneplothsc, fig.height=6, fig.width=15}
+library(Rtsne)
+tsne.out <- Rtsne(pcs, perplexity=20, pca=FALSE) 
+plot(tsne.out$Y[,1], tsne.out$Y[,2], col=all.cols[culture])
+```
+
+However, _t_-SNE is stochastic and more complicated than PCA.
+Testing different settings of the "perplexity" parameter is recommended, as well as running multiple times to check that the conclusions are the same.
+(Check out http://distill.pub/2016/misread-tsne/ for examples of odd _t_-SNE behaviour.)
+
+# Clustering into putative subpopulations
+
+Clearly there's some structure here.
+Here, we know that they're associated with the different culture conditions, but if we didn't we'd have to cluster the cells.
+A quick and dirty approach with hierarchical clustering on Euclidean distances:
+
+```{r}
+my.dist <- dist(pcs)
+my.tree <- hclust(my.dist, method="ward.D2")
+my.clusters <- cutree(my.tree, k=3)
+table(my.clusters, sce$Culture)
+```
+
+We visualize the expression profiles of the top 100 HVGs with a heatmap.
+The average expression is subtracted from each gene so that we can better visualize differences between cells.
+We see "blocks" in expression that correspond nicely to the known culture conditions.
+We possibly could have subclustered further, in which case we would subset and repeat the above process.
+
+```{r heatmaphsc}
+norm.exprs <- exprs(sce)[rownames(hvg.out)[1:100],]
+norm.exprs <- norm.exprs - rowMeans(norm.exprs)
+library(pheatmap)
+side.cols <- all.cols[sce$Culture]
+pheatmap(norm.exprs, cluster_cols=my.tree, 
+    annotation_col=pData(sce)[,"Culture",drop=FALSE], # Colouring by assigned cluster.
+    annotation_colors=list(Culture=setNames(all.cols[1:3], levels(sce$Culture))))
+```
+
+When clustering, it is often useful to look at silhouette plots to assess cluster separatedness.
+Each bar corresponds to a cell, and is proportional to the difference in the average distances to all other cells in the same cluster versus cells in the nearest neighbouring cluster.
+A good gauge for the number of clusters is that which maximizes the average silhouette width.
+
+```{r silhouette, fig.width=10, fig.height=10}
+library(cluster)
+par(mfrow=c(2,2))
+for (k in 2:5) { 
+    example.clusters <- cutree(my.tree, k=k)
+    sil <- silhouette(example.clusters, dist=my.dist)
+    plot(sil, col=rainbow(k)[sort(sil[,1])])
+}
+```
+
+# Identifying marker genes between subpopulations
+
+We use the `findMarkers` function to detect differences between clusters.
+This will perform pairwise DE analyses between clusters, and consolidate the results into a single table of marker genes per cluster.
+
+```{r}
+out <- findMarkers(sce, clusters=my.clusters)
+marker.set <- out[[2]] # Marker set for cluster 2
+head(marker.set)
+```
+
+Consider cluster 2 and the set of genes with `Top <= X`.
+This is equal to the union of the top `X` genes from each pairwise comparison to another cluster.
+We can visualize this more clearly with a heatmap of the top 20 genes.
+
+```{r}
+top.markers <- marker.set$Gene[marker.set$Top <= 10]
+top.exprs <- norm_exprs(sce)[top.markers,,drop=FALSE]
+heat.vals <- top.exprs - rowMeans(top.exprs)
+pheatmap(heat.vals, cluster_cols=my.tree, 
+    annotation_col=data.frame(Cluster=factor(my.clusters), row.names=colnames(sce)),
+    annotation_colors=list(Cluster=setNames(topo.colors(3), seq_along(unique(my.clusters)))))
+```
+
+A valid alternative strategy is to detect marker genes that are uniquely up-regulated or down-regulated in each cluster (set `pval.type="all"`).
+However, be aware that no such genes may exist.
+For example, in a mixed population of T cells, you could have CD4^+^ T cells, CD8^+^ T cells, double negative and double positive cells.
+If each of these formed a cluster, and we only looked for unique genes, neither CD4 or CD8 would be detected!
+
+# Additional comments
+
+It's a good idea to save the `SCESet` object to file with the `saveRDS` function.
+The object can then be easily restored into new R sessions using the `readRDS` function.
+
+```{r}
+saveRDS(file="data.rds", sce)
+```
+
+Data within it can be extracted and used for more complex analyses - more details tomorrow.
+Meanwhile, show the session information for record-keeping:
+
+```{r}
+sessionInfo()
+```
