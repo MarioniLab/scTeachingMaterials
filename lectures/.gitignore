@@ -1,0 +1,10 @@
+*.png
+*.jpg
+*.pdf
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+texput.log
