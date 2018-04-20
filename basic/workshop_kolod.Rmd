@@ -103,14 +103,17 @@ sce
 <div class="alert alert-warning">
 **Exercise:** 
 
-```{r, eval=FALSE}
+```{r}
 # What metadata are available for this dataset?
-sce
+#H# sce
+#A# colData(sce)
 ```
 
-```{r, eval=FALSE}
+```{r}
 # How can you get the metadata value for each cell?
-sce    
+#H# sce
+#A# colData(sce)$Culture
+#A# sce$Culture
 ```
 </div>
 
@@ -148,14 +151,18 @@ rowData(sce)
 <div class="alert alert-warning">
 **Exercise:**
 
-```{r, eval=FALSE}
+```{r}
 # How do you recover the row metadata for each gene?
-sce
+#H# sce
+#A# head(rowData(sce)$SYMBOL)
 ```
 
-```{r, eval=FALSE}
+```{r}
 # How do you add an extra row metadata variable?
-sce
+BLAH <- runif(nrow(sce))
+#H# rowData(sce)
+#A# rowData(sce)$BLAH <- BLAH
+#A# rowData(sce)
 ```
 </div>
 
@@ -174,9 +181,11 @@ sce
 <div class="alert alert-warning">
 **Exercise:**
 
-```{r, eval=FALSE}
+```{r}
 # What does the caret do?
 grepl("^ERCC", "ERCC-001")
+#A# grepl("^ERCC", "TERCC-001")
+#A# grepl("^ERCC-[0-9]+", "ERCC-001")
 ```
 </div>
 
@@ -217,7 +226,7 @@ These are stored in the `colData` of the `SingleCellExperiment` for future refer
 
 ```{r}
 library(scater)
-is.mito <- which(rowData(sce)$Chr == "ChrM")
+is.mito <- which(rowData(sce)$Chr == "chrM")
 sce <- calculateQCMetrics(sce, feature_controls=list(
     ERCC=is.spike, Mt=is.mito)) 
 head(colnames(colData(sce)))
@@ -226,7 +235,7 @@ head(colnames(colData(sce)))
 <div class="alert alert-warning">
 **Exercise:**
 
-```{r, eval=FALSE}
+```{r}
 # Why which()? See this neat trick:
 Y <- LETTERS[1:5]
 X <- c(TRUE, NA, FALSE, NA, TRUE)
@@ -234,6 +243,13 @@ X <- c(TRUE, NA, FALSE, NA, TRUE)
 Y[X]
 Y[which(X)]
 ```
+
+```{r}
+# Why use it with 'is.mito'?
+#H# rowData(sce)$Chr
+#A# sum(is.na(rowData(sce)$Chr))
+```
+
 </div>
 
 We create plots of these statistics below for each culture condition.
@@ -259,17 +275,20 @@ high.ercc <- isOutlier(sce$pct_counts_ERCC, nmads=3, type="higher", batch=sce$Cu
 <div class="alert alert-warning">
 **Exercise:**
 
-```{r, eval=FALSE}
+```{r}
 # What does batch= do in isOutlier()?
 x <- c(1,2,0,1,3,2,1,3,0,1,3,2,4,2,0,1,1,5,2,50,52,53,51)
-
 b <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2)
+
+#A# isOutlier(x)
+#A# isOutlier(x, batch=b)
 ```
 
-```{r, eval=FALSE}
+```{r}
 # What is the minimum library size threshold?
-retained <- 
-plotPhenoData(retained, aesth=aes_string(x="Culture", y="log10_total_counts")),
+#H# retained <- 
+#A# retained <- sce[,!low.lib]
+plotPhenoData(retained, aesth=aes_string(x="Culture", y="log10_total_counts"))
 ```
 </div>
 
@@ -317,9 +336,10 @@ It seems that most cells here are in the S phase.
 <div class="alert alert-warning">
 **Exercise:**
 
-```{r, eval=FALSE}
+```{r}
 # How do we figure out the specific calls?
-assignments
+#H# assignments
+#A# table(assignments$phases)
 ```
 </div>
 
@@ -385,8 +405,9 @@ summary(sizeFactors(sce))
 It's a good idea to plot the size factors against the library sizes as a sanity check.
 There should be some positive correlation.
 
-```{r, eval=FALSE}
-plot( , 
+```{r}
+#H# plot( ,
+#A# plot(sizeFactors(sce), sce$total_counts/1e6, 
     log="xy", ylab="Library size (millions)", xlab="Size factor")
 ```
 </div>
@@ -414,8 +435,9 @@ Note that if you _do_ want to use the spike-in size factors to normalize all gen
 
 The two sets of size factors tend to agree less due to the effects of heterogeneity in total RNA content between cells - this is expected.
 
-```{r, eval=FALSE}
-plot( ,
+```{r}
+#H# plot(sizeFactors(sce, 'ERCC'), sizeFactors(sce),
+#A# plot( ,
     log="xy", xlab="Size factor (ERCC)", ylab="Size factor (genes)")
 ```
 </div>
@@ -436,19 +458,22 @@ The computed values are stored as an `logcounts` matrix in addition to the other
 <div class="alert alert-warning">
 **Exercise:**
 
-```{r, eval=FALSE}
+```{r}
 # How do we find the available assays?
-sce
+#H# sce
+#A# assayNames(sce)
 ```
 
-```{r, eval=FALSE}
+```{r}
 # How to we get a particular assay?
-sce
+#H# sce
+#A# dim(assay(sce, 'logcounts'))
 ```
 
-```{r, eval=FALSE}
+```{r}
 # How do we get the logcounts?
-sce
+#H# sce
+#A# dim(logcounts(sce))
 ```
 </div>
 
@@ -491,9 +516,10 @@ head(hvg.out)
 
 It's wise to check the distribution of expression values for the top HVGs to ensure that the variance estimate is not being dominated by one or two outlier cells.
 
-```{r, eval=FALSE}
+```{r}
 top <- rownames(hvg.out)[1:10]
-plotExpression()
+#H# plotExpression()
+#A# plotExpression(sce, features = top)
 ```
 </div>
 
@@ -510,12 +536,13 @@ The idea is to discard later PCs that contain random technical noise, thus enric
 sce <- denoisePCA(sce, technical=var.fit$trend)
 pcs <- reducedDim(sce) # stored in the object
 dim(pcs) # Cells are rows, PCs are columns
+sce
 ```
 
 We can have a look at the PCs directly, with pairwise plots between the first four PCs.
 
 ```{r pcaplothsc, fig.height=10, fig.width=10}
-plotPCA(sce, ndim=3, colour_by="Culture")
+plotPCA(sce, ncomponents=4, colour_by="Culture")
 ```
 
 <div class="alert alert-warning">
@@ -523,9 +550,10 @@ plotPCA(sce, ndim=3, colour_by="Culture")
 
 What if we want to look at the proportion of variance explained by each PC?
 
-```{r, eval=FALSE}
+```{r}
 prop.var <- attr(pcs, "percentVar")
-plot(, xlab="PC", ylab="Proportion of variance explained")
+#H# plot(.var, xlab="PC", ylab="Proportion of variance explained")
+#A# plot(prop.var, xlab="PC", ylab="Proportion of variance explained")
 ```
 </div>
 
@@ -560,9 +588,10 @@ table(my.clusters, sce$Culture)
 
 How do I make a _t_-SNE plot coloured by cluster?
 
-```{r, eval=FALSE}
-sce$Cluster <- my.clusters
-plotTSNE(sce, colour_by=)
+```{r}
+sce$Cluster <- factor(my.clusters)
+#H# plotTSNE()
+#A# plotTSNE(sce, colour_by='Cluster')
 ```
 </div>
 
@@ -625,14 +654,15 @@ head(marker.set)
 
 What does this represent?
 
-```{r, eval=FALSE}
+```{r}
 marker.set[marker.set$Top <= 1,]
 ```
 
 Try it yourself:
 
-```{r, eval=FALSE}
-marker.set[marker.set$Top <= ,]
+```{r}
+#H# marker.set[marker.set$Top <= ,]
+#A# marker.set[marker.set$Top <= 10,]
 ```
 </div>
 
