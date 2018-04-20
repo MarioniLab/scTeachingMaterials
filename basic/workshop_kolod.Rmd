@@ -50,14 +50,14 @@ To keep things simple, I've only taken only cells in the single batch that conta
 The code involved in obtaining this subset is shown below.
 
 ```{r, eval=FALSE}
-download.url("https://www.ebi.ac.uk/teichmann-srv/espresso/static/counttable_es.csv", "counttable_es.csv")
+download.file("https://www.ebi.ac.uk/teichmann-srv/espresso/static/counttable_es.csv", "counttable_es.csv")
 incoming <- read.table("counttable_es.csv", header=TRUE, row.names=1)
 cell.type <- sub("^ola_mES_(.*)_[0-9]+_[0-9]+.counts$", "\\1", colnames(incoming))
 batch.num <- sub("^ola_mES_.*_([0-9]+)_[0-9]+.counts$", "\\1", colnames(incoming))
 keep <- batch.num == "3"
 write.csv(file="es_data.csv", incoming[,keep], row.names=TRUE)
 write.csv(file="metadata.csv", data.frame(Sample=colnames(incoming), Culture=cell.type, Batch=batch.num)[keep,], row.names=FALSE)
-system("gzip es_data.czv")
+system("gzip es_data.csv")
 ```
 -->
 
@@ -436,8 +436,8 @@ Note that if you _do_ want to use the spike-in size factors to normalize all gen
 The two sets of size factors tend to agree less due to the effects of heterogeneity in total RNA content between cells - this is expected.
 
 ```{r}
-#H# plot(sizeFactors(sce, 'ERCC'), sizeFactors(sce),
-#A# plot( ,
+#H# plot( ,
+#A# plot(sizeFactors(sce, 'ERCC'), sizeFactors(sce),
     log="xy", xlab="Size factor (ERCC)", ylab="Size factor (genes)")
 ```
 </div>
