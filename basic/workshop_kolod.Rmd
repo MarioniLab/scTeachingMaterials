@@ -16,8 +16,7 @@ opts_chunk$set(fig.width=7, fig.height=7)
 
 # Introduction
 
-This practical will perform some of the initial steps in a basic scRNA-seq data analysis. 
-It will start from a count matrix and proceed through:
+This practical will perform some of the initial steps in a basic scRNA-seq data analysis, including: 
 
 - Quality control on the cells
 - Cell cycle phase assignment
@@ -27,7 +26,7 @@ It will start from a count matrix and proceed through:
 - Some visualization and clustering
 - Differential gene detection
 
-This will use R version 3.4.0 or higher, with a number of Bioconductor packages.
+This will use R version 3.5.0 or higher, with a number of Bioconductor packages.
 If you haven't downloaded and installed them already, you can do so by running the code below.
 **This only needs to be done once** - the packages will be on your computer once installed, and can be loaded with `library`.
 
@@ -191,15 +190,12 @@ grepl("^ERCC", "ERCC-001")
 
 To make things easier to interpret, we'll use the gene symbols as row names.
 This requires some fiddling to avoid non-unique gene symbols (in which case we paste the Ensembl ID after it) or missing gene symbols (in which case we use the Ensembl ID).
+`r Biocpkg("scater")` provides the `uniquifyFeatureNames()` function to do this conveniently:
 
 ```{r}
-new.names <- rowData(sce)$SYMBOL
-missing.name <- is.na(new.names)
-new.names[missing.name] <- rowData(sce)$ENSEMBL[missing.name]
-dup.name <- new.names %in% new.names[duplicated(new.names)]
-new.names[dup.name] <- paste0(new.names, "_", rowData(sce)$ENSEMBL)[dup.name]
-rownames(sce) <- new.names
-head(rownames(sce))
+library(scater)
+rownames(sce) <- uniquifyFeatureNames(rowData(sce)$ENSEMBL, rowData(sce)$SYMBOL)
+head(rownames(sce), 50)
 ```
 
 **<rant>**
