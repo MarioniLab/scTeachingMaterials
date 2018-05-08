@@ -10,7 +10,6 @@ output:
 library(BiocStyle)
 library(knitr)
 opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
-opts_chunk$set(fig.width=7, fig.height=7)
 #options(bitmapType="cairo", width=100) # if transparencies don't work on your machine.
 ```
 
