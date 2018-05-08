@@ -207,17 +207,24 @@ hist(sce$pct_counts_Mito, breaks=20, col="grey80",
 	xlab="Proportion of reads in mitochondrial genes")
 ```
 
-Ideally, we would remove cells with low library sizes or total number of expressed features.
-However, this runs the risk of removing cell types with low RNA content.
-Thus, we use a more relaxed strategy and only remove cells with large mitochondrial proportions, using it as a proxy for cell damage.
+We remove cells with low library sizes, low total number of expressed features or high mitochondrial proportions.
+The last is a proxy for cell damage in the absence of spike-in RNA.
 
 ```{r}
+low.lib <- isOutlier(sce$log10_total_counts, nmads=3, type="lower")
+low.nfeat <- isOutlier(sce$log10_total_features_by_counts, nmads=3, type="lower")
 high.mito <- isOutlier(sce$pct_counts_Mito, nmads=3, type="higher")
-sce <- sce[,!high.mito]
-summary(high.mito)
+discard <- low.lib | low.nfeat | high.mito
+data.frame(LowLib=sum(low.lib), LowNFeat=sum(low.nfeat), 
+    HighMito=sum(high.mito), discard=sum(discard))
 ```
 
-Keep in mind that droplet-based datasets usually do not have spike-in RNA, so that QC metric is unlikely to be available.
+We subset the `SingleCellExperiment` object to remove the low-quality cells.
+
+```{r}    
+sce <- sce[,!discard]
+summary(discard)
+```
 
 # Examining gene expression
 
@@ -413,19 +420,19 @@ We only look at upregulated genes in each cluster, as these are more useful for 
 markers <- findMarkers(sce, clusters=sce$Cluster, direction="up")
 ```
 
-We examine the markers for cluster 8 in more detail.
+We examine the markers for cluster 9 in more detail.
 
 ```{r}
-marker.set <- markers[["8"]]
+marker.set <- markers[["9"]]
 head(marker.set, 10) 
 ```
 
-The transcriptional profile of cluster 8 is clearly distinct from the others:
+The transcriptional profile of cluster 9 is clearly distinct from the others:
 
 ```{r}
 chosen <- rownames(marker.set)[marker.set$Top <= 10]
 plotHeatmap(sce, features=chosen, exprs_values="logcounts", 
-    zlim=5, center=TRUE, symmetric=TRUE, cluster_cols=FALSE,
+    zlim=3, center=TRUE, symmetric=TRUE, cluster_cols=FALSE,
     colour_columns_by="Cluster", columns=order(sce$Cluster))
 ```
 
@@ -435,24 +442,31 @@ plotHeatmap(sce, features=chosen, exprs_values="logcounts",
 plotTSNE(sce, colour_by="GNLY")
 ```
 
-So, these are probably cytotoxic T cells. 
+So, these are probably cytotoxic T cells, with some Jun/Fos activity. 
 
 <div class="alert alert-warning">
 **Exercise:** 
 
 ```{r}
-# What on earth are clusters 10 and 11?
-head(markers[["10"]])
-head(markers[["11"]])
+# What's cluster 8? How is it different from 3 and 10?
+marker.set2 <- markers[["8"]]
+chosen <- rownames(marker.set2)[marker.set2$Top <= 10]
+plotHeatmap(sce, features=chosen, exprs_values="logcounts", 
+    zlim=3, center=TRUE, symmetric=TRUE, cluster_cols=FALSE,
+    colour_columns_by="Cluster", columns=order(sce$Cluster))
 ```
 
 ```{r}
-# Looking at ribosomal protein expression:
-ribo.prot <- rownames(sce)[grep("^RP[SL][0-9]", rownames(sce))]
-plotHeatmap(sce, features=ribo.prot, exprs_values="logcounts", 
-    zlim=5, center=TRUE, symmetric=TRUE, cluster_cols=FALSE,
+# Try looking at all genes in both directions:
+markers2 <- findMarkers(sce, clusters=sce$Cluster)
+marker.set2 <- markers2[["8"]]
+chosen <- rownames(marker.set2)[marker.set2$Top <= 10]
+plotHeatmap(sce, features=chosen, exprs_values="logcounts", 
+    zlim=3, center=TRUE, symmetric=TRUE, cluster_cols=FALSE,
     colour_columns_by="Cluster", columns=order(sce$Cluster))
 ```
+
+Check out _CD7_, _CD8_, _S100A4_.
 </div>
 
 # Concluding remarks
