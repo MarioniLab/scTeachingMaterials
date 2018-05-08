@@ -38,7 +38,7 @@ Here, we are using data from Nestorowa et al. (https://doi.org/10.1182/blood-201
 We load in the counts:
 
 ```{r}
-dataN <- read.table(fname, header=TRUE, row.names=1, check.names=FALSE)
+dataN <- read.table("GSE81682_HTSeq_counts.txt.gz", header=TRUE, row.names=1, check.names=FALSE)
 dataN <- as.matrix(dataN)
 dim(dataN)
 ```
@@ -86,14 +86,14 @@ First, we break up the dataset with `quickCluster`:
 
 ```{r}
 library(scran)
-clusters <- quickCluster(sceN, method="igraph")
-table(clusters)
+clustersN <- quickCluster(sceN, method="igraph")
+table(clustersN)
 ```
 
 Then we apply the deconvolution method:
 
 ```{r}
-sceN <- computeSumFactors(sceN, clusters=clusters)
+sceN <- computeSumFactors(sceN, clusters=clustersN)
 summary(sizeFactors(sceN))
 ```
 
@@ -135,5 +135,166 @@ plot(decN$mean, decN$total, xlab="Mean log-expression",
 points(fitN$mean, fitN$var, col="red", pch=16)
 curve(fitN$trend(x), col="red", add=TRUE)
 ```
+
+# Setting up the Paul data
+
+<!--
+```{r, eval=FALSE}
+# Download and read the counts from Paul et al. 2016
+fname <- "umitab_Amit.txt.gz"
+download.file("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE72857&format=file&file=GSE72857%5Fumitab%2Etxt%2Egz", fname)
+```
+-->
+
+## Data input
+
+Here, we are using data from Nestorowa et al. (https://doi.org/10.1182/blood-2016-05-716480).
+We load in the counts, coercing it to a sparse matrix for convenience:
+
+```{r}
+dataP <- read.table("umitab_Amit.txt.gz", header=TRUE, row.names=1, check.names=FALSE)
+dataP <- as.matrix(dataP)
+
+library(Matrix)
+dataP <- as(dataP, "dgCMatrix")
+dim(dataP)
+```
+
+We convert the gene names back to Ensembl:
+
+```{r}
+library(org.Mm.eg.db)
+symbols <- sub(".*;", "", rownames(dataP))
+ens <- mapIds(org.Mm.eg.db, keys=symbols, keytype="SYMBOL", column="ENSEMBL")
+```
+
+We remove duplicates or genes without any Ensembl:
+
+```{r}
+keep <- !is.na(ens) & !duplicated(ens)
+summary(keep)
+dataP <- dataP[keep,]
+rownames(dataP) <- unname(ens[keep])
+```
+
+We now construct a `SingleCellExperiment` object:
+
+```{r}
+sceP <- SingleCellExperiment(list(counts=dataP))
+```
+
+<div class="alert alert-warning">
+**Exercise:**
+
+```{r}
+# What does unname do?
+ens[1:10]
+#H# unname()
+#A# unname(ens)[1:10]
+```
+</div>
+
+## Removing low-quality cells
+
+We will remove some low quality cells here:
+
+```{r}
+library(scater)
+sceP <- calculateQCMetrics(sceP)
+multiplot(cols=2,
+    plotColData(sceP, "log10_total_counts"),
+    plotColData(sceP, "log10_total_features_by_counts"))
+```
+
+We'll apply our outlier strategy:
+
+```{r}
+low.total <- isOutlier(sceP$log10_total_counts, type="lower", nmads=3)
+low.nexpr <- isOutlier(sceP$log10_total_features_by_counts, type="lower", nmads=3)
+discard <- low.total | low.nexpr
+data.frame(LowLib=sum(low.total), LowNexprs=sum(low.nexpr), Lost=sum(discard))
+```
+
+... and discard the offending cells:
+
+```{r}
+sceP <- sceP[,!discard]
+```
+
+<div class="alert alert-warning">
+**Exercise:**
+
+```{r}
+# What is the minimum retained total counts, or total number of features?
+#H# sceP$total_counts
+#H# sceP$total_features_by_counts
+#A# min(sceP$total_counts)
+#A# min(sceP$total_features_by_counts)
+```
+</div>
+
+## Normalizing for cell-specific biases
+
+Again, we break up the dataset with `quickCluster` - note `min.mean` is set lower than the default, as we are dealing with UMI counts.
+
+```{r}
+library(scran)
+clustersP <- quickCluster(sceP, method="igraph", min.mean=0.1)
+table(clustersP)
+```
+
+Then we apply the deconvolution method:
+
+```{r}
+sceP <- computeSumFactors(sceP, clusters=clustersP, min.mean=0.1)
+summary(sizeFactors(sceP))
+```
+
+We plot the size factors against the library sizes as a sanity check:
+
+```{r}
+plot(Matrix::colSums(counts(sceP)), sizeFactors(sceP), log="xy")
+```
+
+Finally, we compute log-normalized expression values:
+
+```{r}
+sceP <- normalize(sceP)
+```
+
+## Detecting highly variable genes
+
+Let's pick out some highly variable genes. 
+There
+
+```{r}
+fitP <- trendVar(sceP, use.spikes=FALSE, loess.args=list(span=0.01))
+decP <- decomposeVar(sceP, fitP)
+head(decP)
+```
+
+Having a look at them on the plot:
+
+```{r}
+plot(decP$mean, decP$total, xlab="Mean log-expression",
+    ylab="Variance of log-expression")
+curve(fitP$trend(x), col="blue", add=TRUE)
+```
+
+<div class="alert alert-warning">
+**Exercise:**
+
+```{r}
+# What happens if you play around with span?
+fitP2 <- trendVar(sceP, use.spikes=FALSE, loess.args=list(span=0.2))
+plot(decP$mean, decP$total, xlab="Mean log-expression",
+    ylab="Variance of log-expression")
+curve(fitP2$trend(x), col="blue", add=TRUE)
+```
+</div>
+
+# Merging a set of highly variable genes
+
+
 
 
