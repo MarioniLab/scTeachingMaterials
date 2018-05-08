@@ -4,8 +4,8 @@ This repository contains some standard teaching materials for scRNA-seq data ana
 It currently relies on packages from Bioconductor version 3.6, and will be updated as required.
 
 - `basic/` uses read count data with ERCC spike-ins from the Fluidigm system.
-This covers the basic concepts of scRNA-seq data analysis and takes approximately 2 hours to complete.
-- `droplet/` uses the PBMC dataset from 10X Genomics.
+This covers the basic concepts of scRNA-seq data analysis and takes approximately 2.5 hours to complete.
+- `droplet/` uses the publicly available Pan T cell dataset from 10X Genomics.
 This describes the analysis of droplet-based scRNA-seq data and takes approximately 1 hour to complete.
 
 Obviously, timings are dependent on the number of questions from the audience, and should be treated appropriately.
@@ -24,6 +24,6 @@ If you use these materials, please cite their ancestral source:
 
 > Lun ATL, McCarthy DJ and Marioni JC (2016). “A step-by-step workflow for low-level analysis of single-cell RNA-seq data with Bioconductor.” F1000Res., 5, pp. 2122.
 
-Additional information can be found in the Bioconductor workflow, from which the workflow is most recently derived:
+Additional information can be found in the Bioconductor workflow, from which these workshops are most recently derived:
 
-https://bioconductor.org/packages/3.7/workflows/html/simpleSingleCell.html
+https://bioconductor.org/packages/release/workflows/html/simpleSingleCell.html
