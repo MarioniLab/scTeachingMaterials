@@ -1,0 +1,277 @@
+---
+title: Preparing to correct batch effects in single-cell RNA-seq data
+author: Aaron T. L. Lun
+output: 
+  BiocStyle::html_document:
+    fit_caption: false
+---
+
+```{r style, echo=FALSE, results='hide', message=FALSE}
+library(BiocStyle)
+library(knitr)
+opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+#options(bitmapType="cairo", width=100) # if transparencies don't work on your machine.
+```
+
+# Setting up the Nestorowa data
+
+## Data input
+
+We download the counts from NCBI GEO corresponding to https://doi.org/10.1182/blood-2016-05-716480.
+
+```{r}
+fnameN <- "GSE81682_HTSeq_counts.txt.gz"
+download.file("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE81682&format=file&file=GSE81682%5FHTSeq%5Fcounts%2Etxt%2Egz", 
+    fnameN)
+```
+
+We load in the counts:
+
+```{r}
+dataN <- read.table(fnameN, header=TRUE, row.names=1, check.names=FALSE)
+dataN <- as.matrix(dataN)
+```
+
+We convert this to a sparse matrix to save space:
+
+```{r}
+library(Matrix)
+dataN <- as(dataN, "dgCMatrix")
+dim(dataN)
+```
+
+... and we get rid of non-genes at the end:
+
+
+```{r}
+dataN <- dataN[!grepl("^_", rownames(dataN)),]
+dim(dataN)
+```
+
+We construct a `SingleCellExperiment` object:
+
+```{r}
+library(SingleCellExperiment)
+sceN <- SingleCellExperiment(list(counts=dataN))
+```
+
+... and throw in some spike-in information:
+
+```{r}
+isSpike(sceN, "ERCC") <- grepl("^ERCC", rownames(sceN))
+```
+
+We also add information about the cell type:
+
+```{r}
+sceN$CellType <- sub("_.*", "", colnames(sceN))
+```
+
+## Normalizing for cell-specific biases
+
+The authors have already done the quality control for us, so we skip straight to the normalization.
+First, we break up the dataset with `quickCluster`:
+
+```{r}
+library(scran)
+clustersN <- quickCluster(sceN, method="igraph")
+table(clustersN)
+```
+
+Then we apply the deconvolution method:
+
+```{r}
+sceN <- computeSumFactors(sceN, clusters=clustersN)
+summary(sizeFactors(sceN))
+```
+
+We plot the size factors against the library sizes as a sanity check:
+
+```{r}
+plot(Matrix::colSums(counts(sceN)), sizeFactors(sceN), log="xy")
+```
+
+We also generate size factors for the spike-ins separately.
+Remember, it's fine that the spike-in size factors are not well-correlated to the deconvolution size factors.
+
+```{r}
+sceN <- computeSpikeFactors(sceN, general.use=FALSE, type="ERCC")
+plot(sizeFactors(sceN), sizeFactors(sceN, "ERCC"), log="xy")
+```
+
+Finally, we compute log-normalized expression values:
+
+```{r}
+sceN <- normalize(sceN)
+```
+
+## Detecting highly variable genes
+
+Let's pick out some highly variable genes.
+
+```{r}
+fitN <- trendVar(sceN, parametric=TRUE, loess.args=list(span=0.2))
+decN <- decomposeVar(sceN, fitN)
+head(decN)
+```
+
+Having a look at them on the plot:
+
+```{r}
+plot(decN$mean, decN$total, xlab="Mean log-expression",
+    ylab="Variance of log-expression")
+points(fitN$mean, fitN$var, col="red", pch=16)
+curve(fitN$trend(x), col="red", add=TRUE)
+```
+
+```{r, echo=FALSE}
+# Clearing the garbage to free up memory
+gc()
+```
+
+# Setting up the Paul data
+
+## Data input
+
+We download the counts from NCBI GEO corresponding to https://doi.org/10.1016/j.cell.2015.11.013.
+
+```{r}
+fnameP <- "umitab_Amit.txt.gz"
+download.file("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE72857&format=file&file=GSE72857%5Fumitab%2Etxt%2Egz", 
+    fnameP)
+```
+
+We load in the counts:
+
+```{r}
+dataP <- read.table(fnameP, header=TRUE, row.names=1, check.names=FALSE)
+dataP <- as.matrix(dataP)
+```
+
+We convert this to a sparse matrix, and take a random set of 2000 cells for the sake of speed:
+
+```{r}
+set.seed(0)
+chosen <- sample(ncol(dataP), 2000)
+dataP <- as(dataP[,chosen], "dgCMatrix")
+dim(dataP)
+```
+
+We convert the gene names back to Ensembl:
+
+```{r}
+library(org.Mm.eg.db)
+symbols <- sub(".*;", "", rownames(dataP))
+ens <- mapIds(org.Mm.eg.db, keys=symbols, keytype="SYMBOL", column="ENSEMBL")
+```
+
+We remove duplicates or genes without any Ensembl:
+
+```{r}
+keep <- !is.na(ens) & !duplicated(ens)
+summary(keep)
+dataP <- dataP[keep,]
+rownames(dataP) <- unname(ens[keep])
+```
+
+We now construct a `SingleCellExperiment` object:
+
+```{r}
+sceP <- SingleCellExperiment(list(counts=dataP))
+```
+
+## Removing low-quality cells
+
+We will remove some low quality cells here:
+
+```{r}
+library(scater)
+sceP <- calculateQCMetrics(sceP)
+multiplot(cols=2,
+    plotColData(sceP, "log10_total_counts"),
+    plotColData(sceP, "log10_total_features_by_counts"))
+```
+
+We'll apply our outlier strategy:
+
+```{r}
+low.total <- isOutlier(sceP$log10_total_counts, type="lower", nmads=3)
+low.nexpr <- isOutlier(sceP$log10_total_features_by_counts, type="lower", nmads=3)
+discard <- low.total | low.nexpr
+data.frame(LowLib=sum(low.total), LowNexprs=sum(low.nexpr), Lost=sum(discard))
+```
+
+... and discard the offending cells:
+
+```{r}
+sceP <- sceP[,!discard]
+```
+
+## Normalizing for cell-specific biases
+
+Again, we break up the dataset with `quickCluster` - note `min.mean` is set lower than the default, as we are dealing with UMI counts.
+
+```{r}
+library(scran)
+clustersP <- quickCluster(sceP, method="igraph", min.mean=0.1)
+table(clustersP)
+```
+
+Then we apply the deconvolution method:
+
+```{r}
+sceP <- computeSumFactors(sceP, clusters=clustersP, min.mean=0.1)
+summary(sizeFactors(sceP))
+```
+
+We plot the size factors against the library sizes as a sanity check:
+
+```{r}
+plot(Matrix::colSums(counts(sceP)), sizeFactors(sceP), log="xy")
+```
+
+Finally, we compute log-normalized expression values:
+
+```{r}
+sceP <- normalize(sceP)
+```
+
+## Detecting highly variable genes
+
+Let's pick out some highly variable genes. 
+There aren't any spike-ins, so we'll have to use `use.spikes=FALSE`.
+
+```{r}
+fitP <- trendVar(sceP, use.spikes=FALSE, loess.args=list(span=0.01))
+decP <- decomposeVar(sceP, fitP)
+head(decP)
+```
+
+Having a look at them on the plot:
+
+```{r}
+plot(decP$mean, decP$total, xlab="Mean log-expression",
+    ylab="Variance of log-expression")
+curve(fitP$trend(x), col="blue", add=TRUE)
+```
+
+# Cleaning up
+
+We clean up after ourselves by deleting the two source files.
+
+```{r}
+unlink(fnameN)
+unlink(fnameP)
+```
+
+We also save the objects for further use.
+
+```{r}
+save(file="objects.Rda", sceN, sceP, decN, decP, fitN, fitP)
+```
+
+Finally, as this procedure was somewhat involved, we will report the session information as well.
+
+```{r}
+sessionInfo()
+```
