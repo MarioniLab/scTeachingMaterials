@@ -36,21 +36,11 @@ biocLite(c("knitr", "BiocStyle", "EnsDb.Hsapiens.v86", "scater",
 We are using a data set containing 3000 T cells from a healthy human donor, see https://support.10xgenomics.com/single-cell-gene-expression/datasets/2.1.0/t_3k.
 The data have already been run through the _CellRanger_ pipeline to yield unique molecular identifier (UMI) counts for each gene in each cell.
 
-<!--
-Data are public and can be obtained from the 10X Genomics website.
-
-```{r, eval=FALSE}
-base.url <- "http://cf.10xgenomics.com/samples/cell-exp/2.1.0/t_3k/t_3k_raw_gene_bc_matrices.tar.gz"
-download.file(base.url, basename(base.url), mode="wb")
-```
--->
 
 We load in the raw count matrix using the `read10xCounts()` function from the `r Biocpkg("DropletUtils")` package.
 This will create a `SingleCellExperiment` object where each column corresponds to a cell barcode.
 
 ```{r}
-untar("t_3k_raw_gene_bc_matrices.tar.gz", exdir="t_3k")
-
 library(DropletUtils)
 fname <- "t_3k/raw_gene_bc_matrices/GRCh38"
 sce <- read10xCounts(fname, col.names=TRUE)

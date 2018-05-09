@@ -1,0 +1,21 @@
+# Setting up the pan T cell data
+
+We download the data.
+
+```{r}
+base.url <- "http://cf.10xgenomics.com/samples/cell-exp/2.1.0/t_3k/t_3k_raw_gene_bc_matrices.tar.gz"
+tarball <- basename(base.url)
+download.file(base.url, tarball, mode="wb")
+```
+
+We unpack it.
+
+```{r}
+untar(tarball, exdir="t_3k")
+```
+
+And we clean up after ourselves.
+
+```{r}
+unlink(tarball)
+```
