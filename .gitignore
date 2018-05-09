@@ -2,4 +2,5 @@
 *.rds
 *.gz
 *.zip
+*.Rda
 droplet/t_3k/

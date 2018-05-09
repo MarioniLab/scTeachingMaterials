@@ -7,6 +7,8 @@ It currently relies on packages from Bioconductor version 3.6, and will be updat
 This covers the basic concepts of scRNA-seq data analysis and takes approximately 2.5 hours to complete.
 - `droplet/` uses the publicly available Pan T cell dataset from 10X Genomics.
 This describes the analysis of droplet-based scRNA-seq data and takes approximately 1 hour to complete.
+- `unbatch/` uses read and UMI count data from studies of the haemtopoietic lineage.
+This describes how to perform batch correction and takes approximately 15 minutes to complete.
 
 Obviously, timings are dependent on the number of questions from the audience, and should be treated appropriately.
 
