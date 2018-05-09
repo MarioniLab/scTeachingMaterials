@@ -28,6 +28,7 @@ For the sake of speed, we've already processed the two datasets to call highly v
 We load in the various R objects using the `load()` function.
 
 ```{r}
+library(SingleCellExperiment)
 load("objects.Rda")
 ls()
 ```
@@ -111,6 +112,7 @@ sceT$Batch <- batch
 We specify `feature_set` to tell `runPCA` to use all available genes in `to.use`.
 
 ```{r}
+library(scater)
 sceT <- runPCA(sceT, exprs_values="exprs", method="irlba",
     ncomponents=50, feature_set=to.use)
 plotPCA(sceT, colour_by="Batch")
