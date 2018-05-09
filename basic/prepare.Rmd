@@ -22,3 +22,9 @@ write.csv(file="es_data.csv", incoming[,keep], row.names=TRUE)
 write.csv(file="metadata.csv", data.frame(Sample=colnames(incoming), Culture=cell.type, Batch=batch.num)[keep,], row.names=FALSE)
 system("gzip es_data.csv")
 ```
+
+Cleaning up.
+
+```{r}
+unlink("counttable_es.csv")
+```
