@@ -4,3 +4,7 @@ rm workshop_unbatch.Rmd
 
 echo "rmarkdown::render('prepare.Rmd')" | R --slave --no-save
 rm prepare.Rmd
+rm prepare.md
+
+rm answers.md
+rm test.sh

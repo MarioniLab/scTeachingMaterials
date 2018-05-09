@@ -9,7 +9,7 @@
 answers.Rmd
 practical.Rmd
 
-answers.knit.md
-answers.utf8.md
-answers_files
+*.knit.md
+*.utf8.md
+*_files
 droplet/t_3k/
