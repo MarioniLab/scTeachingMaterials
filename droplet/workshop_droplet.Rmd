@@ -226,6 +226,9 @@ sce <- sce[,!discard]
 summary(discard)
 ```
 
+Outlier-based QC requires some care in heterogeneous datasets, where particular cell types might naturally express fewer features.
+In this case, the population should be fairly homogeneous (all T cells) so we don't have to worry too much.
+
 # Examining gene expression
 
 The average expression of each gene is much lower here compared to the read count data set, due to:
