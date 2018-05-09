@@ -4,3 +4,5 @@ rm workshop_kolod.Rmd
 
 echo "rmarkdown::render('prepare.Rmd')" | R --slave --no-save
 rm prepare.Rmd
+
+rm answers.md
