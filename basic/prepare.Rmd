@@ -1,0 +1,24 @@
+# Obtaining the mESC data
+
+Downloading the file:
+
+```{r}
+download.file("https://www.ebi.ac.uk/teichmann-srv/espresso/static/counttable_es.csv", "counttable_es.csv")
+```
+
+Reading it into memory, and extracting metadata information from the column names.
+
+```{r}
+incoming <- read.table("counttable_es.csv", header=TRUE, row.names=1)
+cell.type <- sub("^ola_mES_(.*)_[0-9]+_[0-9]+.counts$", "\\1", colnames(incoming))
+batch.num <- sub("^ola_mES_.*_([0-9]+)_[0-9]+.counts$", "\\1", colnames(incoming))
+```
+
+Only retaining the cells in the third batch.
+
+```{r}
+keep <- batch.num == "3"
+write.csv(file="es_data.csv", incoming[,keep], row.names=TRUE)
+write.csv(file="metadata.csv", data.frame(Sample=colnames(incoming), Culture=cell.type, Batch=batch.num)[keep,], row.names=FALSE)
+system("gzip es_data.csv")
+```

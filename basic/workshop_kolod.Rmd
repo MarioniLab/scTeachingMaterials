@@ -41,23 +41,8 @@ biocLite(c("knitr", "BiocStyle", "org.Mm.eg.db", "scater", "Rtsne",
 
 To demonstrate, we'll use a subset of the data from a study of mouse embryonic stem cells (mESCs).
 These mESCs were cultured under various conditions - 2i (ground state), lif (serum) and a2i (alternative ground state).
-A more detailed description of the study is available at http://www.ebi.ac.uk/teichmann-srv/espresso/.
-
-<!--
 To keep things simple, I've only taken only cells in the single batch that contains spike-in transcripts.
-The code involved in obtaining this subset is shown below.
-
-```{r, eval=FALSE}
-download.file("https://www.ebi.ac.uk/teichmann-srv/espresso/static/counttable_es.csv", "counttable_es.csv")
-incoming <- read.table("counttable_es.csv", header=TRUE, row.names=1)
-cell.type <- sub("^ola_mES_(.*)_[0-9]+_[0-9]+.counts$", "\\1", colnames(incoming))
-batch.num <- sub("^ola_mES_.*_([0-9]+)_[0-9]+.counts$", "\\1", colnames(incoming))
-keep <- batch.num == "3"
-write.csv(file="es_data.csv", incoming[,keep], row.names=TRUE)
-write.csv(file="metadata.csv", data.frame(Sample=colnames(incoming), Culture=cell.type, Batch=batch.num)[keep,], row.names=FALSE)
-system("gzip es_data.csv")
-```
--->
+A more detailed description of the study is available at http://www.ebi.ac.uk/teichmann-srv/espresso/.
 
 Our first task is to read in the counts and the associated metadata.
 Here, both files are stored in the CSV format so we can just use the `read.csv` command.
