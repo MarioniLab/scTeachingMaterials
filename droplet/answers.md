@@ -6,12 +6,7 @@ output:
         fig_caption: false
 ---
 
-```{r style, echo=FALSE, results="hide", message=FALSE}
-library(BiocStyle)
-library(knitr)
-opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
-#options(bitmapType="cairo", width=100) # if transparencies don't work on your machine.
-```
+
 
 # Overview 
 
@@ -23,7 +18,8 @@ This worskshop will use R version 3.5.0 or higher, with a number of Bioconductor
 If you haven't downloaded and installed them already, you can do so by running the code below.
 **This only needs to be done once** - the packages will be on your computer once installed, and can be loaded with `library`.
 
-```{r, eval=FALSE}
+
+```r
 source("https://bioconductor.org/biocLite.R")
 biocLite(c("knitr", "BiocStyle", "EnsDb.Hsapiens.v86", "scater", 
     "Rtsne", "DropletUtils", "scran", "pheatmap"))
@@ -37,45 +33,101 @@ We are using a data set containing 3000 T cells from a healthy human donor, see 
 The data have already been run through the _CellRanger_ pipeline to yield unique molecular identifier (UMI) counts for each gene in each cell.
 
 
-We load in the raw count matrix using the `read10xCounts()` function from the `r Biocpkg("DropletUtils")` package.
+We load in the raw count matrix using the `read10xCounts()` function from the *[DropletUtils](http://bioconductor.org/packages/DropletUtils)* package.
 This will create a `SingleCellExperiment` object where each column corresponds to a cell barcode.
 
-```{r}
+
+```r
 library(DropletUtils)
 fname <- "t_3k/raw_gene_bc_matrices/GRCh38"
 sce <- read10xCounts(fname, col.names=TRUE)
 sce
 ```
 
+```
+## class: SingleCellExperiment 
+## dim: 33694 737280 
+## metadata(0):
+## assays(1): counts
+## rownames(33694): ENSG00000243485 ENSG00000237613 ... ENSG00000277475
+##   ENSG00000268674
+## rowData names(2): ID Symbol
+## colnames(737280): AAACCTGAGAAACCAT-1 AAACCTGAGAAACCGC-1 ...
+##   TTTGTCATCTTTAGTC-1 TTTGTCATCTTTCCTC-1
+## colData names(2): Sample Barcode
+## reducedDimNames(0):
+## spikeNames(0):
+```
+
 Here, each count represents the number of UMIs assigned to a gene for a cell barcode.
-Note that the counts are loaded as a sparse matrix object - specifically, a `dgCMatrix` instance from the `r CRANpkg("Matrix")` package.
+Note that the counts are loaded as a sparse matrix object - specifically, a `dgCMatrix` instance from the *[Matrix](https://CRAN.R-project.org/package=Matrix)* package.
 This avoids allocating memory to hold zero counts.
 
-```{r}
+
+```r
 class(counts(sce))
+```
+
+```
+## [1] "dgCMatrix"
+## attr(,"package")
+## [1] "Matrix"
 ```
 
 <div class="alert alert-warning">
 **Exercise:** 
 
-```{r}
+
+```r
 # What is the difference in memory usage?
-#H# object.size()
-#A# object.size(counts(sce))
-#A# as.numeric(ncol(sce))*as.numeric(nrow(sce)) * 4
+object.size(counts(sce))
 ```
 
-```{r}
+```
+## 156613864 bytes
+```
+
+```r
+as.numeric(ncol(sce))*as.numeric(nrow(sce)) * 4
+```
+
+```
+## [1] 99367649280
+```
+
+
+```r
 # How can I get column sums?
-#H# colSums(counts(sce))
-#A# library(Matrix)
-#A# head(colSums(counts(sce)))
-#A# head(Matrix::colSums(counts(sce)))
+library(Matrix)
+head(colSums(counts(sce)))
 ```
 
-```{r}
+```
+## AAACCTGAGAAACCAT-1 AAACCTGAGAAACCGC-1 AAACCTGAGAAACCTA-1 AAACCTGAGAAACGAG-1 
+##                  0                  2                 22                  0 
+## AAACCTGAGAAACGCC-1 AAACCTGAGAAAGTGG-1 
+##                  0                  5
+```
+
+```r
+head(Matrix::colSums(counts(sce)))
+```
+
+```
+## AAACCTGAGAAACCAT-1 AAACCTGAGAAACCGC-1 AAACCTGAGAAACCTA-1 AAACCTGAGAAACGAG-1 
+##                  0                  2                 22                  0 
+## AAACCTGAGAAACGCC-1 AAACCTGAGAAAGTGG-1 
+##                  0                  5
+```
+
+
+```r
 # How many non-zeroes are there?
-#A# mean(counts(sce)!=0)
+mean(counts(sce)!=0)
+```
+
+```
+## [1] 0.000289687
 ```
 </div>
 
@@ -83,20 +135,32 @@ class(counts(sce))
 
 We relabel the rows with the gene symbols for easier reading using the `uniquifyFeatureNames()` function.
 
-```{r}
+
+```r
 library(scater)
 rownames(sce) <- uniquifyFeatureNames(rowData(sce)$ID, rowData(sce)$Symbol)
 head(rownames(sce))
 ```
 
+```
+## [1] "RP11-34P13.3"  "FAM138A"       "OR4F5"         "RP11-34P13.7" 
+## [5] "RP11-34P13.8"  "RP11-34P13.14"
+```
+
 We also identify the chromosomal location for each gene, especially the mitochondrial location as this is particularly useful for later quality control.
 
-```{r}
+
+```r
 library(EnsDb.Hsapiens.v86)
 location <- mapIds(EnsDb.Hsapiens.v86, keys=rowData(sce)$ID, 
     column="SEQNAME", keytype="GENEID")
 rowData(sce)$CHR <- location
 summary(location=="MT")
+```
+
+```
+##    Mode   FALSE    TRUE    NA's 
+## logical   33537      13     144
 ```
 
 # Calling cells from empty droplets
@@ -105,7 +169,8 @@ In droplet-based data, we don't know which droplets actually contain cells and w
 We need to call cells from empty droplets based on the observed expression profiles, which is not always easy due to the presence of extracellular RNA in empty droplets.
 A good place to start is to examine a "barcode rank" plot:
 
-```{r}
+
+```r
 br.out <- barcodeRanks(counts(sce))
 plot(br.out$rank, br.out$total, log="xy", xlab="Rank", ylab="Total count")
 abline(h=br.out$inflection, col="forestgreen")
@@ -113,6 +178,8 @@ abline(h=br.out$knee, col="dodgerblue")
 legend("bottomleft", legend=c("inflection", "knee"),
 	col=c("forestgreen", "dodgerblue"), lwd=2)
 ```
+
+<img src="answers_files/figure-html/unnamed-chunk-9-1.png" width="100%" />
 
 We should see a sharp drop, above which are presumably cells (high RNA content) and below which are empty droplets (low RNA content).
 We could draw some horizontal line to use as a threshold for defining cells, which is pretty much what _CellRanger_ does.
@@ -123,34 +190,51 @@ Any significant deviation indicates that the barcode corresponds to a cell-conta
 
 We call cells at a false discovery rate (FDR) of 1%, meaning that no more than 1% of our called barcodes should be empty droplets on average.
 
-```{r}
+
+```r
 set.seed(100)
 e.out <- emptyDrops(counts(sce))
 sig <- e.out$FDR <= 0.01
 sum(sig, na.rm=TRUE)
 ```
 
+```
+## [1] 3895
+```
+
 We can look at how the likelihoods (of originating from the ambient pool) _decrease_ with increasing total UMI count.
 Note that the negative log-probabilities are plotted below, which _increase_ with increasing total count.
 
-```{r}
+
+```r
 plot(e.out$Total, -e.out$LogProb, log="xy", col=ifelse(sig, "red", "black"),
 	xlab="Total count", ylab="-Log probability")
 legend("topleft", legend=c("Putative cell", "Empty"), 
 	col=c("red", "black"), pch=16)
 ```
 
+<img src="answers_files/figure-html/unnamed-chunk-11-1.png" width="100%" />
+
 `emptyDrops()` computes Monte Carlo _p_-values, so it is important to set the random seed to obtain reproducible results.
 The number of Monte Carlo iterations also determines the lower bound for the _p_values.
 If any non-significant barcodes are `TRUE` for `Limited`, we may need to increase the number of iterations to ensure that they can be detected.
 
-```{r}
+
+```r
 table(Sig=e.out$FDR <= 0.01, Limited=e.out$Limited)
+```
+
+```
+##        Limited
+## Sig     FALSE TRUE
+##   FALSE   542    0
+##   TRUE   2272 1623
 ```
 
 We then subset our `SingleCellExperiment` object to retain only the detected cells.
 
-```{r}
+
+```r
 # using which() to automatically remove NAs.
 sce <- sce[,which(e.out$FDR <= 0.01)]
 ```
@@ -158,26 +242,44 @@ sce <- sce[,which(e.out$FDR <= 0.01)]
 <div class="alert alert-warning">
 **Exercise:** 
 
-```{r}
+
+```r
 # How could I get all cells above the knee point?
-#H# keep <- br.out$total >= 
-#A# keep <- br.out$total >= br.out$knee
-#A# summary(keep)
+keep <- br.out$total >= br.out$knee
+summary(keep)
 ```
 
-```{r}
+```
+##    Mode   FALSE    TRUE 
+## logical  734523    2757
+```
+
+
+```r
 # How can I recapitulate _CellRanger_'s cell calling?
-#H# ?defaultDrops
-#A# cr.keep <- defaultDrops(counts(sce), expected=3000)
-#A# summary(cr.keep)
+cr.keep <- defaultDrops(counts(sce), expected=3000)
+summary(cr.keep)
 ```
 
-```{r}
+```
+##    Mode   FALSE    TRUE 
+## logical     632    3263
+```
+
+
+```r
 # What does table() do with two variables?
 fruits <- sample(c("Apple", "Banana", "Cucumbers"), 10, replace=TRUE)
 people <- sample(c("Alex", "Brett", "Cameron"), 10, replace=TRUE)
-#H# table()
-#A# table(fruits, people)
+table(fruits, people)
+```
+
+```
+##            people
+## fruits      Alex Brett Cameron
+##   Apple        1     2       1
+##   Banana       0     1       2
+##   Cucumbers    0     3       0
 ```
 </div>
 
@@ -186,7 +288,8 @@ people <- sample(c("Alex", "Brett", "Cameron"), 10, replace=TRUE)
 It is entirely possible for droplets to contain damaged or dying cells, which need to be removed prior to downstream analysis.
 We compute some QC metrics using `calculateQCMetrics()` and examine their distributions:
 
-```{r}
+
+```r
 sce <- calculateQCMetrics(sce, feature_controls=list(Mito=which(location=="MT")))
 par(mfrow=c(1,3))
 hist(sce$log10_total_counts, breaks=20, col="grey80",
@@ -197,10 +300,13 @@ hist(sce$pct_counts_Mito, breaks=20, col="grey80",
 	xlab="Proportion of reads in mitochondrial genes")
 ```
 
+<img src="answers_files/figure-html/unnamed-chunk-17-1.png" width="100%" />
+
 We remove cells with low library sizes, low total number of expressed features or high mitochondrial proportions.
 The last is a proxy for cell damage in the absence of spike-in RNA.
 
-```{r}
+
+```r
 low.lib <- isOutlier(sce$log10_total_counts, nmads=3, type="lower")
 low.nfeat <- isOutlier(sce$log10_total_features_by_counts, nmads=3, type="lower")
 high.mito <- isOutlier(sce$pct_counts_Mito, nmads=3, type="higher")
@@ -209,11 +315,22 @@ data.frame(LowLib=sum(low.lib), LowNFeat=sum(low.nfeat),
     HighMito=sum(high.mito), discard=sum(discard))
 ```
 
+```
+##   LowLib LowNFeat HighMito discard
+## 1    675      666      578     747
+```
+
 We subset the `SingleCellExperiment` object to remove the low-quality cells.
 
-```{r}    
+
+```r
 sce <- sce[,!discard]
 summary(discard)
+```
+
+```
+##    Mode   FALSE    TRUE 
+## logical    3148     747
 ```
 
 Outlier-based QC requires some care in heterogeneous datasets, where particular cell types might naturally express fewer features.
@@ -226,60 +343,105 @@ The average expression of each gene is much lower here compared to the read coun
 - the reduced coverage per cell when thousands of cells are multiplexed together for sequencing.
 - the collapsing of multiple reads from PCR amplicons of the same transcript into a single UMI.
 
-```{r}
+
+```r
 ave <- calcAverage(sce)
 rowData(sce)$AveCount <- ave
 hist(log10(ave), col="grey80")
 ```
 
+<img src="answers_files/figure-html/unnamed-chunk-20-1.png" width="100%" />
+
 The set of most highly expressed genes is dominated by ribosomal protein and mitochondrial genes, as expected.
 
-```{r}
+
+```r
 plotHighestExprs(sce)
 ```
+
+<img src="answers_files/figure-html/unnamed-chunk-21-1.png" width="100%" />
 
 # Normalizing for cell-specific biases
 
 We perform some pre-clustering to break up obvious clusters and avoid pooling cells that are very different.
 The `min.mean=` argument just avoids using genes with lots of zero counts.
 
-```{r}
+
+```r
 library(scran)
 clusters <- quickCluster(sce, method="igraph", min.mean=0.1)
 table(clusters)
 ```
 
+```
+## clusters
+##    1    2 
+## 1359 1789
+```
+
 We then apply the deconvolution method to compute size factors for all cells.
 
-```{r}
+
+```r
 sce <- computeSumFactors(sce, min.mean=0.1, cluster=clusters)
 summary(sizeFactors(sce))
 ```
 
+```
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##  0.3329  0.7960  0.9293  1.0000  1.0808 11.8380
+```
+
 The size factors are well correlated against the library sizes, indicating that capture efficiency and sequencing depth are the major biases.
 
-```{r sfplot, fig.cap="Size factors for all cells in the PBMC dataset, plotted against the library size."}
+
+```r
 plot(sce$total_counts, sizeFactors(sce), log="xy")
 ```
+
+<div class="figure">
+<img src="answers_files/figure-html/sfplot-1.png" alt="Size factors for all cells in the PBMC dataset, plotted against the library size." width="100%" />
+<p class="caption">(\#fig:sfplot)Size factors for all cells in the PBMC dataset, plotted against the library size.</p>
+</div>
 
 Finally, we compute normalized log-expresion values.
 There is no need to call `computeSpikeFactors()` here, as there are no spike-in transcripts available.
 
-```{r}
+
+```r
 sce <- normalize(sce)
 assayNames(sce)
+```
+
+```
+## [1] "counts"    "logcounts"
 ```
 
 <div class="alert alert-warning">
 **Exercise:** 
 
-```{r}
+
+```r
 # What do we do about negative size factors?
 clusters2 <- quickCluster(sce, method="igraph", min.mean=0.1, k=4)
 sce2 <- computeSumFactors(sce, min.mean=0.1, cluster=clusters2)
 summary(sizeFactors(sce2))
-sum(sizeFactors(sce2) < 0)
+```
 
+```
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##  0.2992  0.7947  0.9280  1.0000  1.0842 12.0512
+```
+
+```r
+sum(sizeFactors(sce2) < 0)
+```
+
+```
+## [1] 0
+```
+
+```r
 lib.factors <- librarySizeFactors(sce2)
 is.neg <- sizeFactors(sce2) < 0
 sizeFactors(sce2)[is.neg] <- lib.factors[is.neg]
@@ -292,69 +454,113 @@ sizeFactors(sce2)[is.neg] <- lib.factors[is.neg]
 We don't have spike-ins, so we can't directly model the technical noise.
 One option is to assume that most genes do not exhibit strong biological variation, and to fit a trend to the variances of endogenous genes.
 
-```{r}
+
+```r
 fit <- trendVar(sce, use.spikes=FALSE, loess.args=list(span=0.05))
 plot(fit$mean, fit$var, pch=16, xlab="Mean log-exression",
 	ylab="Variance of log-expression")
 curve(fit$trend(x), col="dodgerblue", add=TRUE)
 ```
 
+<img src="answers_files/figure-html/unnamed-chunk-26-1.png" width="100%" />
+
 Another option is to assume that the technical noise is Poisson and create a fitted trend on that basis using the `makeTechTrend()` function.
 
-```{r}
+
+```r
 new.trend <- makeTechTrend(x=sce)
 plot(fit$mean, fit$var, pch=16,  xlab="Mean log-exression",
 	ylab="Variance of log-expression")
 curve(new.trend(x), col="red", add=TRUE)
 ```
 
+<img src="answers_files/figure-html/unnamed-chunk-27-1.png" width="100%" />
+
 Assuming Poisson noise, we decompose the total variance to its technical and biological components:
 
-```{r}
+
+```r
 fit$trend <- new.trend # tricking decomposeVar into thinking this is the trend!
 dec <- decomposeVar(fit=fit)
 top.dec <- dec[order(dec$bio, decreasing=TRUE),]
 head(top.dec)
 ```
 
+```
+## DataFrame with 6 rows and 6 columns
+##                     mean            total               bio
+##                <numeric>        <numeric>         <numeric>
+## CCL5   0.866739857997132 1.87484547069157  1.32506876873723
+## JUNB     3.4232198752903 1.50006371638144  1.27712383213415
+## S100A4   2.0227251520207 1.58285537030451  1.06170243994199
+## KLRB1  0.736603991564056  1.5360462457721  1.02808303353067
+## GNLY   0.578686736972986 1.45771630304116  1.01799752744899
+## JUN     2.37743664893431 1.43222413308213 0.992471814944436
+##                     tech   p.value       FDR
+##                <numeric> <numeric> <numeric>
+## CCL5   0.549776701954339         0         0
+## JUNB   0.222939884247295         0         0
+## S100A4 0.521152930362521         0         0
+## KLRB1  0.507963212241431         0         0
+## GNLY   0.439718775592171         0         0
+## JUN    0.439752318137697         0         0
+```
+
 We have a look at the genes with the largest biological components.
 
-```{r}
+
+```r
 plotExpression(sce, features=rownames(top.dec)[1:10])
 ```
+
+<img src="answers_files/figure-html/unnamed-chunk-29-1.png" width="100%" />
 
 # Dimensionality reduction
 
 We use the `denoisePCA()` function with the assumed Poisson technical trend, to choose the number of dimensions to retain after PCA.
-Note the `approx=TRUE`, which uses `r CRANpkg("irlba")` to perform a fast PCA.
+Note the `approx=TRUE`, which uses *[irlba](https://CRAN.R-project.org/package=irlba)* to perform a fast PCA.
 
-```{r}
+
+```r
 sce <- denoisePCA(sce, technical=new.trend, approx=TRUE)
 ncol(reducedDim(sce, "PCA"))
 ```
 
+```
+## [1] 26
+```
+
 Examination of the first few PCs already reveals two clear clusters in the data:
 
-```{r}
+
+```r
 plotPCA(sce, ncomponents=3, colour_by="log10_total_features_by_counts")
 ```
 
+<img src="answers_files/figure-html/unnamed-chunk-31-1.png" width="100%" />
+
 This is recapitulated with a _t_-SNE plot _on the PCs_, see the use of `use_dimred=`.
 
-```{r}
+
+```r
 sce <- runTSNE(sce, use_dimred="PCA", perplexity=30, rand_seed=100)
 plotTSNE(sce, colour_by="log10_total_features_by_counts")
 ```
 
+<img src="answers_files/figure-html/unnamed-chunk-32-1.png" width="100%" />
+
 <div class="alert alert-warning">
 **Exercise:** 
 
-```{r}
+
+```r
 # Do people remember how to look at the percentage of variance explained?
-#A# plot(attr(reducedDim(sce), "percentVar"), xlab="PC",
-#A# 	ylab="Proportion of variance explained")
-#A# abline(v=ncol(reducedDim(sce, "PCA")), lty=2, col="red")
+plot(attr(reducedDim(sce), "percentVar"), xlab="PC",
+	ylab="Proportion of variance explained")
+abline(v=ncol(reducedDim(sce, "PCA")), lty=2, col="red")
 ```
+
+<img src="answers_files/figure-html/unnamed-chunk-33-1.png" width="100%" />
 </div>
 
 # Clustering with graph-based methods
@@ -362,24 +568,48 @@ plotTSNE(sce, colour_by="log10_total_features_by_counts")
 We start by building a shared nearest neighbour graph, where each cells is connected to its neighbours by an edge.
 Unlike hierarchical clustering, we do not need to construct a distance matrix for a very large number of cells.
 
-```{r}
+
+```r
 snn.gr <- buildSNNGraph(sce, use.dimred="PCA")
 snn.gr
+```
+
+```
+## IGRAPH e62734c U-W- 3148 226300 -- 
+## + attr: weight (e/n)
+## + edges from e62734c:
+##  [1] 1--  20 1--  46 1--  98 1-- 106 1-- 196 1-- 356 1-- 374 1-- 400 1-- 440
+## [10] 1-- 446 1-- 452 1-- 497 1-- 531 1-- 571 1-- 586 1-- 590 1-- 592 1-- 607
+## [19] 1-- 642 1-- 721 1-- 741 1-- 767 1-- 817 1-- 849 1-- 878 1-- 922 1-- 973
+## [28] 1--1085 1--1090 1--1102 1--1194 1--1227 1--1264 1--1290 1--1310 1--1433
+## [37] 1--1449 1--1488 1--1500 1--1515 1--1522 1--1542 1--1550 1--1579 1--1593
+## [46] 1--1598 1--1634 1--1653 1--1722 1--1765 1--1777 1--1828 1--1906 1--1963
+## [55] 1--1995 1--2018 1--2029 1--2031 1--2037 1--2056 1--2075 1--2094 1--2167
+## [64] 1--2216 1--2252 1--2273 1--2278 1--2323 1--2362 1--2365 1--2366 1--2399
+## + ... omitted several edges
 ```
 
 We then use the Walktrap algorithm to identify clusters, i.e., "communities" in the graph.
 These are groups of cells that are highly connected within each group, which relatively few connections between groups.
 
-```{r}
+
+```r
 clusters <- igraph::cluster_walktrap(snn.gr)
 sce$Cluster <- factor(clusters$membership)
 table(sce$Cluster)
 ```
 
+```
+## 
+##   1   2   3   4   5   6   7   8   9  10 
+## 210 353 780 336  20  34  50 872 111 382
+```
+
 We examine the "modularity" of the clusters, i.e., how enriched a cluster is for intra-group connections relative to what is expected under a null model.
 At least a few of the clusters are not very modular (strong off-diagonal entries) - not surprising for T cell subsets.
 
-```{r}
+
+```r
 cluster.mod <- clusterModularity(snn.gr, sce$Cluster, get.values=TRUE)
 log.ratio <- log2(cluster.mod$observed/cluster.mod$expected + 1)
 
@@ -388,19 +618,36 @@ pheatmap(log.ratio, cluster_rows=FALSE, cluster_cols=FALSE,
     color=colorRampPalette(c("white", "blue"))(100))
 ```
 
+<img src="answers_files/figure-html/unnamed-chunk-36-1.png" width="100%" />
+
 We examine the cluster identities on a _t_-SNE plot:
 
-```{r}
+
+```r
 plotTSNE(sce, colour_by="Cluster")
 ```
+
+<img src="answers_files/figure-html/unnamed-chunk-37-1.png" width="100%" />
 
 <div class="alert alert-warning">
 **Exercise:** 
 
-```{r}
+
+```r
 # Why did I use igraph::? 
 library(igraph)
-#A# normalize
+normalize
+```
+
+```
+## function (xmin = -1, xmax = 1, ymin = xmin, ymax = xmax, zmin = xmin, 
+##     zmax = xmax) 
+## {
+##     args <- grab_args()
+##     layout_modifier(id = "normalize", args = args)
+## }
+## <bytecode: 0x434daff8>
+## <environment: namespace:igraph>
 ```
 </div>
 
@@ -409,38 +656,99 @@ library(igraph)
 We detect marker genes for each cluster using `findMarkers()`.
 We only look at upregulated genes in each cluster, as these are more useful for positive identification of cell types in a heterogeneous population.
 
-```{r}
+
+```r
 markers <- findMarkers(sce, clusters=sce$Cluster, direction="up")
 ```
 
 We examine the markers for cluster 9 in more detail.
 
-```{r}
+
+```r
 marker.set <- markers[["9"]]
 head(marker.set, 10) 
 ```
 
+```
+## DataFrame with 10 rows and 11 columns
+##              Top                  FDR            logFC.1           logFC.2
+##        <integer>            <numeric>          <numeric>         <numeric>
+## CCL5           1 1.35571776191053e-93  0.299503521296469  3.40769540463458
+## NKG7           1 3.58783922891146e-91   1.36240873433019  3.68583090468534
+## GNLY           1 1.09092990619759e-80   1.81033675688683  3.89278636557171
+## GZMH           1 1.50696931178594e-52   1.93955152517173  2.39583911109895
+## NR4A2          1 1.00490085513719e-17   0.24896234769308 0.962836203951776
+## FGFBP2         2  1.1200174028583e-34   1.52947400071519  1.67814241954785
+## NFKBIA         2 1.12298208204903e-15 -0.416902561124387 0.956997336621619
+## S100A4         3 6.37128458494299e-72  0.305523229423491  2.05824641246928
+## JUNB           3 1.96241476137119e-13 -0.160286112603715 0.896368221362048
+## HLA-B          4 4.23055781588675e-64  0.248788044486981 0.871839289668576
+##                    logFC.3           logFC.4           logFC.5
+##                  <numeric>         <numeric>         <numeric>
+## CCL5      2.87197545966007   2.6085315064624  3.55586120533402
+## NKG7       3.5903251460287  3.55914489547306  3.52863383333417
+## GNLY      3.76968841666717  3.72664526129715  3.88291089049325
+## GZMH      2.39279780410589  2.40996929372838  2.36758170942541
+## NR4A2  -0.0444081306136161 0.859263607361854 0.448520832862128
+## FGFBP2    1.69465058278613   1.7083673365335   1.6742713648862
+## NFKBIA  -0.596958273738673 0.666470186247867 0.320312255159684
+## S100A4   0.500399710484244 0.255891021313823  1.57401825769147
+## JUNB    -0.682527727221608 0.552221506713604 0.769684488931648
+## HLA-B    0.726722859421497 0.632881322157227  1.50888983826696
+##                  logFC.6             logFC.7             logFC.8
+##                <numeric>           <numeric>           <numeric>
+## CCL5    3.24248332012342  -0.238611369485005    3.52317132803508
+## NKG7     3.3749908046408  0.0402736502211583    3.66683693591061
+## GNLY    3.89596099558442   0.445310552149588    3.90607928515039
+## GZMH    2.28496770713443   0.129424697758096    2.40341262514359
+## NR4A2   1.03499767742804    1.11595672048672 -0.0337515518142997
+## FGFBP2  1.65791083072441   0.272054992151401    1.70170204894078
+## NFKBIA 0.774456110085071    1.31359399485157  -0.103145555811661
+## S100A4 0.130115329804307   0.168273443902509    2.03799496436042
+## JUNB    1.30437493178583    1.79202090707657  -0.782712157129713
+## HLA-B  0.830757109230738 0.00167740211102707   0.869476509429505
+##                  logFC.10
+##                 <numeric>
+## CCL5     3.44996096588923
+## NKG7     3.65343340251918
+## GNLY     3.92902943464824
+## GZMH     2.41081951315912
+## NR4A2  -0.135778659349081
+## FGFBP2   1.69053012974944
+## NFKBIA 0.0491395123086693
+## S100A4    2.0564527510763
+## JUNB   -0.641864655863407
+## HLA-B   0.843945206336727
+```
+
 The transcriptional profile of cluster 9 is clearly distinct from the others:
 
-```{r}
+
+```r
 chosen <- rownames(marker.set)[marker.set$Top <= 10]
 plotHeatmap(sce, features=chosen, exprs_values="logcounts", 
     zlim=3, center=TRUE, symmetric=TRUE, cluster_cols=FALSE,
     colour_columns_by="Cluster", columns=order(sce$Cluster))
 ```
 
+<img src="answers_files/figure-html/unnamed-chunk-41-1.png" width="100%" />
+
 ... which can be further examined on the _t_-SNE plot:
 
-```{r}
+
+```r
 plotTSNE(sce, colour_by="GNLY")
 ```
+
+<img src="answers_files/figure-html/unnamed-chunk-42-1.png" width="100%" />
 
 So, these are probably cytotoxic T cells, with some Jun/Fos activity. 
 
 <div class="alert alert-warning">
 **Exercise:** 
 
-```{r}
+
+```r
 # What's cluster 8? How is it different from 3 and 10?
 marker.set2 <- markers[["8"]]
 chosen <- rownames(marker.set2)[marker.set2$Top <= 10]
@@ -449,7 +757,10 @@ plotHeatmap(sce, features=chosen, exprs_values="logcounts",
     colour_columns_by="Cluster", columns=order(sce$Cluster))
 ```
 
-```{r}
+<img src="answers_files/figure-html/unnamed-chunk-43-1.png" width="100%" />
+
+
+```r
 # Try looking at all genes in both directions:
 markers2 <- findMarkers(sce, clusters=sce$Cluster)
 marker.set2 <- markers2[["8"]]
@@ -459,6 +770,8 @@ plotHeatmap(sce, features=chosen, exprs_values="logcounts",
     colour_columns_by="Cluster", columns=order(sce$Cluster))
 ```
 
+<img src="answers_files/figure-html/unnamed-chunk-44-1.png" width="100%" />
+
 Check out _CD7_, _CD8_, _S100A4_.
 </div>
 
@@ -467,7 +780,8 @@ Check out _CD7_, _CD8_, _S100A4_.
 Having completed the basic analysis, we save the `SingleCellExperiment` object with its associated data to file.
 This avoids having to repeat all of the pre-processing steps described above prior to further analyses.
 
-```{r}
+
+```r
 saveRDS(sce, file="t3k_data.rds")
 ```
 
@@ -475,7 +789,92 @@ See https://www.bioconductor.org/packages/devel/workflows/vignettes/simpleSingle
 
 Meanwhile, show the session information for record-keeping:
 
-```{r}
+
+```r
 sessionInfo()
+```
+
+```
+## R version 3.5.0 Patched (2018-04-30 r74681)
+## Platform: x86_64-pc-linux-gnu (64-bit)
+## Running under: Ubuntu 16.04.4 LTS
+## 
+## Matrix products: default
+## BLAS: /home/cri.camres.org/lun01/Software/R/R-3-5-branch-release/lib/libRblas.so
+## LAPACK: /home/cri.camres.org/lun01/Software/R/R-3-5-branch-release/lib/libRlapack.so
+## 
+## locale:
+##  [1] LC_CTYPE=en_GB.UTF-8       LC_NUMERIC=C              
+##  [3] LC_TIME=en_GB.UTF-8        LC_COLLATE=en_GB.UTF-8    
+##  [5] LC_MONETARY=en_GB.UTF-8    LC_MESSAGES=en_GB.UTF-8   
+##  [7] LC_PAPER=en_GB.UTF-8       LC_NAME=C                 
+##  [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+## [11] LC_MEASUREMENT=en_GB.UTF-8 LC_IDENTIFICATION=C       
+## 
+## attached base packages:
+## [1] parallel  stats4    stats     graphics  grDevices utils     datasets 
+## [8] methods   base     
+## 
+## other attached packages:
+##  [1] igraph_1.2.1                pheatmap_1.0.8             
+##  [3] scran_1.8.1                 EnsDb.Hsapiens.v86_2.99.0  
+##  [5] ensembldb_2.4.1             AnnotationFilter_1.4.0     
+##  [7] GenomicFeatures_1.32.0      AnnotationDbi_1.42.1       
+##  [9] scater_1.8.0                ggplot2_2.2.1              
+## [11] Matrix_1.2-14               DropletUtils_1.0.0         
+## [13] SingleCellExperiment_1.2.0  SummarizedExperiment_1.10.0
+## [15] DelayedArray_0.6.0          matrixStats_0.53.1         
+## [17] Biobase_2.40.0              GenomicRanges_1.32.2       
+## [19] GenomeInfoDb_1.16.0         IRanges_2.14.5             
+## [21] S4Vectors_0.18.1            BiocGenerics_0.26.0        
+## [23] BiocParallel_1.14.1         knitr_1.20                 
+## [25] BiocStyle_2.8.0            
+## 
+## loaded via a namespace (and not attached):
+##  [1] ProtGenerics_1.12.0      bitops_1.0-6            
+##  [3] bit64_0.9-7              RColorBrewer_1.1-2      
+##  [5] progress_1.1.2           httr_1.3.1              
+##  [7] rprojroot_1.3-2          dynamicTreeCut_1.63-1   
+##  [9] tools_3.5.0              backports_1.1.2         
+## [11] irlba_2.3.2              DT_0.4                  
+## [13] R6_2.2.2                 vipor_0.4.5             
+## [15] DBI_1.0.0                lazyeval_0.2.1          
+## [17] colorspace_1.3-2         gridExtra_2.3           
+## [19] prettyunits_1.0.2        curl_3.2                
+## [21] bit_1.1-12               compiler_3.5.0          
+## [23] labeling_0.3             rtracklayer_1.40.2      
+## [25] bookdown_0.7             scales_0.5.0            
+## [27] stringr_1.3.0            digest_0.6.15           
+## [29] Rsamtools_1.32.0         rmarkdown_1.9           
+## [31] XVector_0.20.0           pkgconfig_2.0.1         
+## [33] htmltools_0.3.6          highr_0.6               
+## [35] limma_3.36.1             htmlwidgets_1.2         
+## [37] rlang_0.2.0              RSQLite_2.1.1           
+## [39] FNN_1.1                  shiny_1.0.5             
+## [41] DelayedMatrixStats_1.2.0 bindr_0.1.1             
+## [43] dplyr_0.7.4              RCurl_1.95-4.10         
+## [45] magrittr_1.5             GenomeInfoDbData_1.1.0  
+## [47] Rcpp_0.12.16             ggbeeswarm_0.6.0        
+## [49] munsell_0.4.3            Rhdf5lib_1.2.0          
+## [51] viridis_0.5.1            stringi_1.2.2           
+## [53] yaml_2.1.19              edgeR_3.22.1            
+## [55] zlibbioc_1.26.0          Rtsne_0.13              
+## [57] rhdf5_2.24.0             plyr_1.8.4              
+## [59] grid_3.5.0               blob_1.1.1              
+## [61] promises_1.0.1           shinydashboard_0.7.0    
+## [63] lattice_0.20-35          cowplot_0.9.2           
+## [65] Biostrings_2.48.0        locfit_1.5-9.1          
+## [67] pillar_1.2.2             rjson_0.2.18            
+## [69] reshape2_1.4.3           biomaRt_2.36.0          
+## [71] XML_3.98-1.11            glue_1.2.0              
+## [73] evaluate_0.10.1          data.table_1.11.2       
+## [75] httpuv_1.4.2             gtable_0.2.0            
+## [77] assertthat_0.2.0         xfun_0.1                
+## [79] mime_0.5                 xtable_1.8-2            
+## [81] later_0.7.2              viridisLite_0.3.0       
+## [83] tibble_1.4.2             GenomicAlignments_1.16.0
+## [85] beeswarm_0.2.3           memoise_1.1.0           
+## [87] tximport_1.8.0           bindrcpp_0.2.2          
+## [89] statmod_1.4.30
 ```
 
