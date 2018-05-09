@@ -3,4 +3,13 @@
 *.gz
 *.zip
 *.Rda
+*.tsv
+*.csv
+
+answers.Rmd
+practical.Rmd
+
+answers.knit.md
+answers.utf8.md
+answers_files
 droplet/t_3k/
