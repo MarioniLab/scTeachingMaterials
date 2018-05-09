@@ -32,6 +32,28 @@ load("objects.Rda")
 ls()
 ```
 
+<div class="alert alert-warning">
+**Exercise:** 
+
+We inspect some of these objects:
+
+```{r}
+sceN
+```
+
+```{r}
+sceP
+```
+
+```{r}
+decN
+```
+
+```{r}
+decP
+```
+</div>
+
 # Merging a set of highly variable genes
 
 First, we need to obtain a common set of genes based on the Ensembl IDs.
@@ -42,15 +64,26 @@ common <- intersect(rownames(decN), rownames(decP))
 length(common)
 ```
 
-We combine the statistics using `combineVar`.
+We combine the statistics using `combineVar` from `r Biocpkg("scran")`.
 This uses Fisher's method to combine p-values across batches.
 We take all genes that are significant at a FDR of 5%.
 
 ```{r}
+library(scran)
 combined <- combineVar(decP[common,], decN[common,])
 to.use <- common[combined$FDR <= 0.05]
 length(to.use)
 ```
+
+<div class="alert alert-warning">
+**Exercise:** 
+
+```{r}
+# What happens if we forget to use [common,]?
+#H# combined2 <- combineVar(decP, decN)
+#A# try(combined2 <- combineVar(decP, decN))
+```
+</div>
 
 # Removing the batch effect
 
