@@ -207,8 +207,7 @@ These are stored in the `colData` of the `SingleCellExperiment` for future refer
 ```{r}
 library(scater)
 is.mito <- which(rowData(sce)$Chr == "chrM")
-sce <- calculateQCMetrics(sce, feature_controls=list(
-    ERCC=is.spike, Mt=is.mito)) 
+sce <- calculateQCMetrics(sce, feature_controls=list(Mt=is.mito)) 
 head(colnames(colData(sce)))
 ```
 
@@ -230,16 +229,21 @@ Y[which(X)]
 #A# sum(is.na(rowData(sce)$Chr))
 ```
 
+```{r}
+# Existing ERCC information is used 'for free':
+#A# colnames(colData(sce))
+```
+
 </div>
 
 We create plots of these statistics below for each culture condition.
 
 ```{r qualplot, fig.height=10, fig.width=10}
 multiplot(cols=2,
-    plotPhenoData(sce, aesth=aes_string(x="Culture", y="log10_total_counts")),
-    plotPhenoData(sce, aesth=aes_string(x="Culture", y="total_features")),
-    plotPhenoData(sce, aesth=aes_string(x="Culture", y="pct_counts_ERCC")),
-    plotPhenoData(sce, aesth=aes_string(x="Culture", y="pct_counts_Mt"))
+    plotColData(sce, x="Culture", y="log10_total_counts"),
+    plotColData(sce, x="Culture", y="total_features"),
+    plotColData(sce, x="Culture", y="pct_counts_ERCC"),
+    plotColData(sce, x="Culture", y="pct_counts_Mt")
 )
 ```
 
@@ -268,7 +272,7 @@ b <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2)
 # What is the minimum library size threshold?
 #H# retained <- 
 #A# retained <- sce[,!low.lib]
-plotPhenoData(retained, aesth=aes_string(x="Culture", y="log10_total_counts"))
+plotColData(retained, x="Culture", y="log10_total_counts")
 ```
 </div>
 
@@ -379,7 +383,7 @@ sce <- computeSumFactors(sce, min.mean=1)
 summary(sizeFactors(sce))
 ```
 
-<div class="alert alert-warning">
+/<div class="alert alert-warning">
 **Exercise:**
 
 It's a good idea to plot the size factors against the library sizes as a sanity check.
@@ -463,7 +467,7 @@ We identify HVGs to focus on the genes that are driving heterogeneity across the
 This requires estimation of the variance in expression for each gene, followed by decomposition of the variance into biological and technical components.
 
 ```{r}
-var.fit <- trendVar(sce, method="loess", span=0.2)
+var.fit <- trendVar(sce, method="loess", loess.args=list(span=0.2))
 var.out <- decomposeVar(sce, var.fit)
 head(var.out)    
 ```
@@ -649,7 +653,7 @@ Try it yourself:
 We can visualize this more clearly with a heatmap of the top 20 genes.
 
 ```{r}
-top.markers <- marker.set$Gene[marker.set$Top <= 10]
+top.markers <- rownames(marker.set)[marker.set$Top <= 10]
 top.exprs <- logcounts(sce)[top.markers,,drop=FALSE]
 heat.vals <- top.exprs - rowMeans(top.exprs)
 pheatmap(heat.vals, cluster_cols=my.tree, 
