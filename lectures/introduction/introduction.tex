@@ -56,7 +56,7 @@ Quantify expression of every gene\footnote{poly A'd} in the transcriptome:
 \end{frame}
 
 \begin{frame}{Physical separation methods: microfluidics}
-Most popular of which is the Fluidigm C1:
+Most popular of which is the Fluidigm C1 (96 cells per chip):
 \begin{center}
 \includegraphics[width=0.7\textwidth]{pics/fluidigm_c1.jpg}
 \end{center}
@@ -70,7 +70,8 @@ Sort individual cells into 96/384-well plates (``plate-based''):
 \includegraphics[width=0.5\textwidth]{pics/facs_to_plate.pdf}
 \end{center}
 
-Cheap, provides extra phenotypic data, easy to customize.
+Cheap, provides extra phenotypic data, easy to customize:\\
+$\quad\hookrightarrow$ control wells, spike-ins, randomization, automation
 \end{frame}
 
 \begin{frame}{Physical separation methods: droplets}
@@ -80,13 +81,24 @@ Capture cells in droplets in a water-in-oil emulsion:
 \includegraphics[width=0.65\textwidth]{pics/droplets.pdf}
 \end{center}
 
-High throughput (4000-10000 per run), lower coverage, noisier. 
+Very high throughput (4000-10000 per run) but noisier per cell.
 \end{frame}
 
+\begin{frame}{Reverse transcription overview: protocols}
+Most\footnote{All?} protocols use oligo-dT primers for first-strand synthesis.
+\begin{center}
+\includegraphics[width=0.8\textwidth,trim=0mm 45mm 0mm 0mm,clip]{pics/grun_design.jpg} \\
+{\tiny Adapted from Gr\"un and van Oudenaarden, 2015, \emph{Cell}.}
+\end{center}
+\end{frame}
 
+\begin{frame}{Reverse transcription: unique molecular identifiers}
+\begin{center}
+\includegraphics[width=0.8\textwidth]{pics/umis.pdf}
+\end{center}
 
-
-
-
+Dedupping with UMIs to reduce amplification noise (5'/3' biased)\\
+$\quad\hookrightarrow$ CEL-seq2, STRT-seq, droplet-based methods
+\end{frame}
 
 \end{document}
