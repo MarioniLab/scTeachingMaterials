@@ -84,7 +84,7 @@ Capture cells in droplets in a water-in-oil emulsion:
 Very high throughput (4000-10000 per run) but noisier per cell.
 \end{frame}
 
-\begin{frame}{Reverse transcription overview: protocols}
+\begin{frame}{cDNA library prep: overview of protocols}
 Most\footnote{All?} protocols use oligo-dT primers for first-strand synthesis.
 \begin{center}
 \includegraphics[width=0.8\textwidth,trim=0mm 45mm 0mm 0mm,clip]{pics/grun_design.jpg} \\
@@ -92,13 +92,48 @@ Most\footnote{All?} protocols use oligo-dT primers for first-strand synthesis.
 \end{center}
 \end{frame}
 
-\begin{frame}{Reverse transcription: unique molecular identifiers}
+\begin{frame}{cDNA library prep: unique molecular identifiers}
 \begin{center}
 \includegraphics[width=0.8\textwidth]{pics/umis.pdf}
 \end{center}
 
 Dedupping with UMIs to reduce amplification noise (5'/3' biased)\\
 $\quad\hookrightarrow$ CEL-seq2, STRT-seq, droplet-based methods
+\end{frame}
+
+\begin{frame}{Cell barcoding: the motivation}
+Modern Illumina sequencers have massive throughput:
+\begin{itemize}
+\item $> 3 \times 10^8$ reads per lane 
+\item 8 lanes per flow cell
+\item 2 flow cells per run (HiSeq 4000)
+\end{itemize}
+\pause
+\begin{exampleblock}{Multiplexing - what and why?}
+Pool cDNA from many cells together, and sequence the pool.
+\begin{itemize}
+\item More cost-effective - spread coverage across cells
+\item Logistically easier - robust to lane failures
+\end{itemize}
+\end{exampleblock}
+\pause
+Deumultiplexing = assigning pooled reads back to cell of origin
+\begin{itemize}
+\item Label cDNA from each cell with a unique sequence (``barcode'') prior to pooling
+\item Identify barcode from sequenced reads
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Cell barcoding: strategies}
+Cell barcode in the PCR primer:
+\begin{itemize}
+\item avoid complicating oligo-dT primer 
+\item plate-based only; add different primers to each well
+\end{itemize}
+Cell barcode in the oligo-dT primer:
+\begin{center}
+\includegraphics[width=0.9\textwidth]{pics/barcodes.pdf}
+\end{center}
 \end{frame}
 
 \end{document}
