@@ -75,7 +75,7 @@ $\quad\hookrightarrow$ control wells, spike-ins, randomization, automation
 \end{frame}
 
 \begin{frame}{Physical separation methods: droplets}
-Capture cells in droplets in a water-in-oil emulsion:
+Capture cells in aqueous droplets in oil suspension (e.g., 10X):
 
 \begin{center}
 \includegraphics[width=0.65\textwidth]{pics/droplets.pdf}
@@ -135,5 +135,44 @@ Cell barcode in the oligo-dT primer:
 \includegraphics[width=0.9\textwidth]{pics/barcodes.pdf}
 \end{center}
 \end{frame}
+
+\begin{frame}{Brief overview of reversible terminator sequencing}
+\begin{minipage}{0.69\textwidth}
+\includegraphics[width=0.9\textwidth,trim=0mm 80mm 140mm 5mm,clip]{pics/sequencing_metzker.jpg} 
+\end{minipage}
+\begin{minipage}{0.29\textwidth}
+{\tiny Adapted from Metzker, 2010, \\\textit{Nature Reviews Genetics}}
+\end{minipage}
+\end{frame}
+
+\begin{frame}{Sequencing data formats: FASTQ}
+\begin{enumerate}
+\item Read name, starting with \texttt{@}
+\item Read sequence, usually of constant length from 50-150 bp
+\item \texttt{+} separator
+\item Read quality, encoded as ASCII + 33 {\tiny (Quality of 40 $\to$ 40 + 33 $\to$ 73 $\to$ \texttt{I})}
+\end{enumerate}
+\begin{center}
+\includegraphics[width=\textwidth,trim=0mm 84mm 150mm 0mm,clip]{pics/fastq.png}
+\end{center}
+Paired-end data has 2 FASTQs per library (10X data has 3!)\\
+$\quad\hookrightarrow$ paired reads have the same name      
+\end{frame}
+
+\begin{frame}{Sequencing data formats: SAM/BAM}
+\textbf{Align} reads to a reference genome (or transcriptome).
+\begin{itemize}
+\item Read sequences ``mapped'' to originating location.
+\item Can be tricky for intron-spanning reads, repeat regions!
+\item Many good \& fast aligners - \texttt{subread}, \texttt{STAR}, etc.
+\end{itemize}
+\vspace{0.1in}
+\textbf{S}equence \textbf{A}lignment/\textbf{M}ap format (BAM = compressed)
+\begin{center}
+\includegraphics[width=\textwidth]{pics/sam.png}
+\end{center}
+Stores alignment information for each read.
+\end{frame}
+
 
 \end{document}
