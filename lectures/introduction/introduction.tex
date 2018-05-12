@@ -174,5 +174,44 @@ $\quad\hookrightarrow$ paired reads have the same name
 Stores alignment information for each read.
 \end{frame}
 
+\begin{frame}{Quantifying gene expression per cell}
+Count the number of reads mapping to exonic regions of each gene:
+\begin{center}
+\includegraphics[width=\textwidth]{pics/feature_counts.pdf}
+\end{center}
+\begin{itemize}
+\item Handling paired reads, exon-exon reads, overlapping genes?
+\item Collapsing reads with the same UMI into a single count
+\item Pseudo-aligners, e.g., \texttt{salmon}, \texttt{kallisto}
+\end{itemize}
+\vspace{0.1in}
+\textbf{Endpoint:} one read (or UMI) count per gene per cell
+\end{frame}
+
+
+\begin{frame}{What does scRNA-seq data look like?}
+A typical scRNA-seq count matrix:
+\begin{center}
+\includegraphics[width=\textwidth]{../computational/pics/scData.pdf} \\
+\vspace{-.1in}
+{\tiny Data from \textit{Science} (2015), 347:1138-42}
+\end{center}
+\begin{itemize}
+\item lots of zeros due to dropout events (\textbf{or no expression!})
+\item variable total counts across cells - cell-specific biases
+\item variable counts per gene - part biological, part technical
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}{Single-cell data analysis}
+\begin{enumerate}
+\item Quality control on the cells
+\item Normalization of cell-specific biases
+\item Dimensionality reduction
+\item Visualization
+\item Clustering
+\end{enumerate}
+\end{frame}
 
 \end{document}
