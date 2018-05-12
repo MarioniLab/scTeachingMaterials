@@ -14,8 +14,8 @@
    height="1052.3622047"
    id="svg2"
    version="1.1"
-   inkscape:version="0.48.4 r9939"
-   sodipodi:docname="scRNAseq.svg">
+   inkscape:version="0.91 r13725"
+   sodipodi:docname="scData.svg">
   <sodipodi:namedview
      id="base"
      pagecolor="#ffffff"
@@ -23,9 +23,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.9899495"
-     inkscape:cx="215.99395"
-     inkscape:cy="899.72175"
+     inkscape:zoom="1.979899"
+     inkscape:cx="408.55471"
+     inkscape:cy="975.86567"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -145,12 +145,14 @@
        id="text3164"
        y="48.151733"
        x="542.83099"
-       style="font-size:16.13832664px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#ff0000;fill-opacity:1;stroke:none;font-family:Sans"
+       style="font-style:normal;font-weight:normal;font-size:16.13832664px;line-height:125%;font-family:Sans;letter-spacing:0px;word-spacing:0px;fill:#ff0000;fill-opacity:1;stroke:none"
        xml:space="preserve"><tspan
          id="tspan3168"
          y="48.151733"
          x="542.83099"
-         sodipodi:role="line">~100 - 1000</tspan><tspan
+         sodipodi:role="line">~100 - 10<tspan
+   style="font-size:65%;baseline-shift:super"
+   id="tspan4189">6</tspan></tspan><tspan
          id="tspan3170"
          y="68.324638"
          x="542.83099"
