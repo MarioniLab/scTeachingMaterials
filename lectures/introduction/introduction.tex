@@ -188,7 +188,6 @@ Count the number of reads mapping to exonic regions of each gene:
 \textbf{Endpoint:} one read (or UMI) count per gene per cell
 \end{frame}
 
-
 \begin{frame}{What does scRNA-seq data look like?}
 A typical scRNA-seq count matrix:
 \begin{center}
@@ -203,15 +202,100 @@ A typical scRNA-seq count matrix:
 \end{itemize}
 \end{frame}
 
-
 \begin{frame}{Single-cell data analysis}
+\textbf{Aim:} To extract real biology from data with technical noise
 \begin{enumerate}
-\item Quality control on the cells
-\item Normalization of cell-specific biases
-\item Dimensionality reduction
-\item Visualization
+\item Quality control
+\item Normalization 
+\item Batch correction
+\item Dimensionality reduction and visualization
 \item Clustering
 \end{enumerate}
 \end{frame}
+
+\begin{frame}{Quality control on the cells}
+Remove low quality cells:
+\begin{itemize}
+\item Low total counts (``library size'') 
+\item Low number of expressed genes (non-zero counts) 
+\item High percentage of spike-in or mitochondrial reads 
+\end{itemize}
+\pause
+\begin{center}
+\includegraphics[width=0.9\textwidth]{pics/cell_damage.pdf}
+\end{center}
+\end{frame}
+
+\begin{frame}{Distributions of spike-in, mitochondrial proportions}
+Various batches of human ESCs:
+\begin{center}
+\includegraphics[width=\textwidth]{../computational/pics/mitoAndSpikes_WR.png}
+\end{center}
+{\tiny Data from Ferdinand von Meyenn and Wolf Reik at the Babraham Institute}
+\end{frame}
+
+
+\begin{frame}{Normalization for cell-specific biases}
+Differences in library size, capture efficiency, composition bias:
+\begin{center}
+\includegraphics[width=0.7\textwidth]{pics/cell_biases.pdf}
+\end{center}
+\end{frame}
+
+\begin{frame}{Scaling normalization}
+Scaling normalization to remove biases \textit{between} cells \\
+$\quad\hookrightarrow$ compute a ``size factor'' to divide the counts for each cell \\[0.1in]
+\textbf{To demonstrate:} consider counts for a few genes in a few cells
+\begin{itemize}
+\item assume X, Y, Z... are \textit{not} DE between cells
+\item systematic fold-differences are technical in origin
+\end{itemize}
+
+\begin{center}
+\begin{tabular}{l p{0.2in} p{0.2in} p{0.2in} p{0.2in}}
+\hline
+\textbf{Cell} & \textbf{A} & \textbf{B} & \textbf{C} & \textbf{D} \\
+\hline
+Gene X & 10 & \alt<1>{20}{\textcolor{red}{10}} & \alt<1>{30}{\textcolor{red}{10}} & \alt<1>{40}{\textcolor{red}{10}} \\
+Gene Y & 15 & \alt<1>{30}{\textcolor{red}{15}} & \alt<1>{45}{\textcolor{red}{15}} & \alt<1>{60}{\textcolor{red}{15}} \\
+Gene Z & 20 & \alt<1>{40}{\textcolor{red}{20}} & \alt<1>{60}{\textcolor{red}{20}} & \alt<1>{80}{\textcolor{red}{20}} \\
+& ... & ... & ... & ... \\ 
+\hline
+\textbf{Size factor} & 1 & 2 & 3 & 4 \\
+\hline
+\end{tabular}
+\end{center}
+\pause
+Scales \textit{down} counts prior to comparisons between cells 
+\end{frame}
+
+\begin{frame}{Normalization and composition biases}
+\begin{center}
+\includegraphics[width=\textwidth]{pics/composition_bias.pdf}
+\end{center}
+Composition biases introduced by differential expression:
+\begin{itemize}
+\item Competition for the ``sequencing pie''
+\item Normalization by library size is particularly susceptible
+\item Requires methods robust to DE
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}{Normalization in real data}
+Up to and over an order of magnitude difference in scaling:
+\begin{center}
+\includegraphics[width=0.45\textwidth]{pics/416B_LibvDeconv.png}\vspace{0.1in}
+\includegraphics[width=0.45\textwidth]{pics/zeisel_LibvDeconv.png}
+\end{center}
+\begin{itemize}
+\item[Left:] 416B cells with oncogene induction {\tiny (Lun et al., 2017, \textit{Genome Research})}
+\item[Right:] Mouse brain cells {\tiny (Zeisel et al., 2015, \textit{Science})}
+\end{itemize}
+\end{frame}
+
+
+
+
 
 \end{document}
