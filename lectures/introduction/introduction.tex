@@ -281,7 +281,6 @@ Composition biases introduced by differential expression:
 \end{itemize}
 \end{frame}
 
-
 \begin{frame}{Normalization in real data}
 Up to and over an order of magnitude difference in scaling:
 \begin{center}
@@ -294,8 +293,115 @@ Up to and over an order of magnitude difference in scaling:
 \end{itemize}
 \end{frame}
 
+\begin{frame}{Dimensionality reduction with PCA}
+PCA = principal components analysis
+\begin{itemize}
+\item identifies axes of maximal variance in high-dimensional data
+\item each principal component (PC) explains less variance 
+\end{itemize}
+\begin{center}
+\includegraphics[width=\textwidth,trim=0mm 5mm 0mm 40mm,clip]{../computational/pics/pca_explanation.pdf}
+\end{center}
+\textbf{Use the first few (5-100) PCs as a ``summary'' of the data}
+\begin{itemize}
+\item Speed up downstream analyses by reducing dimensionality
+\item Focus on biology, remove random noise in later PCs
+\end{itemize}
+\vspace{0.1in}
+Alternative to using top HVGs for clustering, $t$-SNE, etc.
+\end{frame}
 
+\begin{frame}{Visualization with PCA}
+The first 2-3 PCs can be directly used for visualization:
+\begin{center}
+\includegraphics[width=0.9\textwidth]{../computational/pics/pca_brain_SL.png} \\
+    {\tiny Data from Zeisel et al., 2015, \textit{Science}}
+\end{center}
+Simple and efficient, but limited resolution of complex structure.
+% Internal differences within blobs not visible, dominated by differences between blobs.
+\end{frame}
 
+\begin{frame}{Visualization with $t$-SNE}
+Finds a low-dimensional representation of high-dimensional data 
+\begin{itemize}
+    \item preserve distances to neighbouring cells
+    \item non-linear: not limited to straight axes
+\end{itemize}
+\begin{center}
+    \includegraphics[width=0.9\textwidth]{../computational/pics/tsne_brain_SL.png} \\
+    {\tiny Data from Zeisel et al., 2015, \textit{Science}}
+\end{center}
+Powerful, but need to fiddle with random seed and perplexity
+\end{frame}
 
+\begin{frame}{Batch correction}
+Large datasets need to be processed in multiple batches: 
+\begin{itemize}
+\item Batch effects caused by differences in processing
+\item Correction based on common subpopulations
+\end{itemize}
+\vspace{0.1in}
+\begin{minipage}{0.49\textwidth}
+\begin{flushleft}
+\textbf{Before correction}
+\includegraphics[width=\textwidth]{pics/haem_raw.png} \\
+\end{flushleft}
+\end{minipage}
+\begin{minipage}{0.49\textwidth}
+\begin{flushleft}
+\textbf{After correction}
+\includegraphics[width=\textwidth]{pics/haem_corrected.png} \\
+\end{flushleft}
+\end{minipage}
+\\[0.1in]
+{\tiny Data from Nestorawa et al., 2016, \textit{Blood}; Paul et al., 2015, \textit{Cell}}
+\end{frame}
+
+\begin{frame}{Clustering strategies}
+
+\end{frame}
+
+\begin{frame}{Real applications: pluripotency}
+Identify new hESC population between naive/primed cells:
+\begin{center}
+\includegraphics[width=0.49\textwidth, trim=0mm 0mm 0mm 20mm,clip]{pics/hESC_transition.pdf}
+\includegraphics[width=0.49\textwidth, trim=0mm 0mm 0mm 0mm,clip]{pics/hESC_heatmap.pdf}\\
+{\tiny von Meyenn et al., 2018, in prep.}
+\end{center}
+\end{frame}
+
+\begin{frame}{Real applications: ageing}
+CD4$^+$ T cells become more variable with age: 
+\begin{center}
+\includegraphics[width=\textwidth,trim=0mm 50mm 0mm 0mm,clip]{pics/tcell_aging.jpg} \\
+{\tiny Martinez-Jimenez et al., 2017, \textit{Science}}
+\end{center}
+\end{frame}
+
+\begin{frame}{Real applications: embryonic development}
+\begin{center}
+\includegraphics[width=0.75\textwidth]{pics/gastrulation.jpg} \\
+{\tiny Ibarra-Soria et al., 2018, \textit{Nature Cell Biology}}
+\end{center}
+\end{frame}
+
+\begin{frame}{Wrapping up}
+Experimental protocols:
+\begin{itemize}
+\item How are cells separated and barcoded?
+\item With or without UMIs?
+\end{itemize}
+
+Computational methods for data analysis:
+\begin{itemize}
+\item separate technical effects from real biology:
+\item quality control, normalization, batch correction, etc.
+\end{itemize}
+\vspace{0.1in}
+\begin{center}
+\includegraphics[height=0.5in]{../computational/pics/cruk_logo.png} \hspace{0.1in}
+\includegraphics[height=0.5in]{../computational/pics/cam_logo.jpg} 
+\end{center}
+\end{frame}
 
 \end{document}
