@@ -1,9 +1,10 @@
 ---
 title: Correcting batch effects in single-cell RNA-seq data
-author: Aaron T. L. Lun
+author: Aaron Lun
+date: "`r Sys.Date()`"
 output: 
-    BiocStyle::html_document:
-        fit_caption: false
+  BiocStyle::html_document:
+    fit_caption: false
 ---
 
 ```{r style, echo=FALSE, results='hide', message=FALSE}

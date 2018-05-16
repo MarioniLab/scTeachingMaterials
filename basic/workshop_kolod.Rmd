@@ -1,6 +1,7 @@
 ---
 title: A simple analysis of single-cell RNA seq data with Bioconductor packages
-author: Aaron Lun  
+author: Aaron Lun 
+date: "`r Sys.Date()`"
 output: 
   BiocStyle::html_document:
     fig_caption: false
