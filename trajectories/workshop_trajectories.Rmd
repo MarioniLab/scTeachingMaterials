@@ -1,0 +1,201 @@
+---
+title: Creating trajectories from scRNA-seq data
+author: Aaron Lun
+date: "`r Sys.Date()`"
+output:
+  BiocStyle::html_document:
+    fig_caption: false
+---
+
+```{r style, echo=FALSE, results='hide', message=FALSE}
+library(BiocStyle)
+library(knitr)
+opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+#options(bitmapType="cairo", width=100) # if transparencies don't work on your machine.
+```
+
+# Introduction
+
+For continuous phenomena, it is less appropriate to summarize the data in terms of discrete clusters.
+Rather, we want to characterize the cell "trajectories", i.;e., curves in the high-dimensional expression space on which the cells lie.
+These trajectories (hopefully) correspond to continuous biological processes such as differentiation.
+
+To demonstrate, we will be using the Nestorowa dataset from the previous workshop. 
+This involves capturing cells as they progress throughout haematopoietic differentiation, and is a good candidate for playing with trajectories:
+
+```{r}
+load("../unbatch/objects.Rda")
+sceN
+```
+
+We'll perform a PCA, and do our trajectory calculations on the PCs instead of the original expression values.
+
+```{r}
+library(scran)
+sceN <- denoisePCA(sceN, decN, approximate=TRUE)
+rd <- reducedDim(sceN, "PCA")
+ncol(rd)
+```
+
+# Using `r Biocpkg("destiny")`
+
+## Creating visualizations
+
+First we will use the `r Biocpkg("destiny")` package, which models trajectories through diffusion maps.
+
+1. We calculate distances between all pairs of cells (or in practice, just the nearest neighbours).
+2. The probability of moving from one cell to another is dependent on the distance (larger distance = lower probability).
+3. We build a transition probability matrix, normalized by the density of cells.
+4. We define diffusion components from the eigenvectors of the transition matrix.
+
+```{r}
+library(destiny)
+dm <- DiffusionMap(rd) # cells are rows here!
+dm
+```
+
+We extract the first two "diffusion components":
+
+```{r}
+plot(dm@eigenvectors[,1], dm@eigenvectors[,2], xlab="DC1", ylab="DC2")
+```
+
+We can store this in the object for more general plotting with `r Biocpkg("scater")`:
+
+```{r}
+library(scater)
+reducedDim(sceN, "DiffusionMap") <- dm@eigenvectors
+plotDiffusionMap(sceN, colour_by="ENSMUSG00000031162") # Gata1
+```
+
+More plotting:
+
+```{r}
+plotDiffusionMap(sceN, colour_by="ENSMUSG00000015355") # Cd48
+```
+
+More plotting:
+
+```{r}
+plotDiffusionMap(sceN, colour_by="ENSMUSG00000006389") # Mpl
+```
+
+<div class="alert alert-warning">
+**Exercise:** 
+
+Direct slot access is **Bad**:
+
+- Internal fields are generally subject to changes without prior notice.
+- Data representation and scientific meaning may not be equivalent.
+
+Avoid if possible!
+</div>
+
+## Getting pseudotime orderings
+
+A visualization is nice, but to perform analyses we need the location of cells along the trajectory.
+This is referred to as "pseudotime", and can be obtained using the `DPT` function.
+
+```{r}
+dp.out <- DPT(dm)
+```
+
+We can see the branch assignments from pulling out the `branch` slot.
+
+```{r}
+sceN$branch <- factor(dp.out@branch[,1])
+plotDiffusionMap(sceN, colour_by="branch")
+```
+
+We can also get pseudotime values:
+
+```{r}
+sceN$pseudotime <- dp.out[,1]
+plotDiffusionMap(sceN, colour_by="pseudotime")
+```
+
+# Testing for DE along pseudotime
+
+We can use the pseudotime orderings to test for DE along pseudotime, using methods from the `r Biocpkg("limma")` package:
+
+```{r}
+library(limma)
+design <- model.matrix(~sceN$pseudotime)
+fit <- lmFit(logcounts(sceN), design)
+fit <- eBayes(fit, robust=TRUE, trend=TRUE)
+summary(decideTests(fit))    
+topTable(fit)   
+```
+
+What about changes along one branch?
+
+```{r}
+on.branch.3 <- which(sceN$branch==3) # NA protection
+sceN3 <- sceN[,on.branch.3]
+design3 <- model.matrix(~sceN3$pseudotime)
+fit3 <- lmFit(logcounts(sceN3), design3)
+fit3 <- eBayes(fit3, robust=TRUE, trend=TRUE)
+summary(decideTests(fit3))    
+topTable(fit3)   
+```
+
+<div class="alert alert-warning">
+**Exercise:** 
+
+What about non-linear changes over time?
+
+```{r}
+spl <- splines::ns(sceN$pseudotime, df=4)
+design.spl <- model.matrix(~spl)
+#A# fit <- lmFit(logcounts(sceN), design.spl)
+#A# fit <- eBayes(fit, robust=TRUE, trend=TRUE)
+#A# topTable(fit)   
+```
+</div>
+
+# Using `r Biocpkg("monocle")`
+
+Next, we will use the `r Biocpkg("destiny")` package.
+This _used_ to use a minimum spanning tree on the cell expression profiles, now it uses reverse graph embedding.
+The idea is to cluster cells in low-dimensional space and build a MST on the cluster centroids, while preserving similarities in the high-dimensional space.
+
+```{r}
+library(monocle)
+cds <- convertTo(sceN, type="monocle")
+cds <- setOrderingFilter(cds, rownames(decN)[which(decN$FDR<=0.05)])
+```
+
+We do dimensionality reduction for visualization:
+
+```{r}
+cds <- reduceDimension(cds, max_components=2, method='DDRTree')
+```
+
+And we define the cell orderings.
+This gives us the `Pseudotime` and the `State` variables.
+
+```{r}
+cds <- orderCells(cds)    
+head(phenoData(cds)$Pseudotime)
+head(phenoData(cds)$State)
+```
+
+We can plot this using the `plot` method:
+
+```{r}
+plot_cell_trajectory(cds)
+```
+
+... or the pseudotimes.
+
+```{r}
+plot_cell_trajectory(cds, color_by="Pseudotime")
+```
+
+Again, this information can be used in DE testing with `r Biocpkg("limma")` or other packages.
+
+# Session information
+
+```{r}
+sessionInfo()
+```
