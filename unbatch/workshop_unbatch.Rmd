@@ -99,13 +99,13 @@ Let's try doing that:
 library(limma)
 batch <- rep(c("N", "P"), c(ncol(sceN), ncol(sceP)))
 together <- cbind(logcounts(sceN)[to.use,], logcounts(sceP)[to.use,])
-together <- removeBatchEffect(together, batch=batch)
+corrected <- removeBatchEffect(together, batch=batch)
 ```
 
 We set up a `SingleCellExperiment` object again:
 
 ```{r}
-sceT <- SingleCellExperiment(list(exprs=together))
+sceT <- SingleCellExperiment(list(exprs=corrected))
 sceT$Batch <- batch
 ```
 
@@ -138,6 +138,22 @@ Even after `removeBatchEffect`, a strong batch effect still remains, for two rea
 # How do I check what reduced dimension results are available?
 #H# reducedDimNames()
 #A# reducedDimNames(sceT)
+```
+
+We can get rid of the first effect to some extent using cosine normalization, but the second effect can't be resolved by _a priori_-defined linear models:
+
+```{r}
+together2 <- scran:::cosine.norm(together)
+rownames(together2) <- to.use
+#H# corrected2 <- removeBatchEffect()
+#A# corrected2 <- removeBatchEffect(together2, batch=batch)
+
+# Same as before...
+sceT2 <- SingleCellExperiment(list(exprs=corrected2))
+sceT2$Batch <- batch
+sceT2 <- runPCA(sceT2, exprs_values="exprs", method="irlba",
+    ncomponents=50, feature_set=to.use)
+plotPCA(sceT2, colour_by="Batch")
 ```
 </div>
 
