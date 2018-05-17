@@ -1,9 +1,10 @@
 ---
 title: Correcting batch effects in single-cell RNA-seq data
-author: Aaron T. L. Lun
+author: Aaron Lun
+date: "2018-05-17"
 output: 
-    BiocStyle::html_document:
-        fit_caption: false
+  BiocStyle::html_document:
+    fit_caption: false
 ---
 
 
@@ -24,6 +25,7 @@ We load in the various R objects using the `load()` function.
 
 
 ```r
+library(SingleCellExperiment)
 load("objects.Rda")
 ls()
 ```
@@ -228,34 +230,206 @@ Let's try doing that:
 library(limma)
 batch <- rep(c("N", "P"), c(ncol(sceN), ncol(sceP)))
 together <- cbind(logcounts(sceN)[to.use,], logcounts(sceP)[to.use,])
-together <- removeBatchEffect(together, batch=batch)
+corrected <- removeBatchEffect(together, batch=batch)
 ```
 
 We set up a `SingleCellExperiment` object again:
 
 
 ```r
-sceT <- SingleCellExperiment(list(exprs=together))
+sceT <- SingleCellExperiment(list(exprs=corrected))
 sceT$Batch <- batch
 ```
 
 ...and we make a PCA plot to look at, using *[irlba](https://CRAN.R-project.org/package=irlba)* to get the first 50 PCs.
-We specify `feature_set` to tell `runPCA` to use all available genes in `to.use`.
+We specify `ntop=Inf` to tell `runPCA` to use all available genes in `to.use`.
 
 
+```r
+library(scater)
+sceT <- runPCA(sceT, exprs_values="exprs", method="irlba",
+    ncomponents=50, ntop=Inf)
+plotPCA(sceT, colour_by="Batch")
+```
+
+<img src="answers_files/figure-html/unnamed-chunk-11-1.png" width="100%" />
+
+Trying out a _t_-SNE plot:
 
 
+```r
+sceT <- runTSNE(sceT, use_dimred="PCA", perplexity=80)
+plotTSNE(sceT, colour_by="Batch")
+```
+
+<img src="answers_files/figure-html/unnamed-chunk-12-1.png" width="100%" />
+
+Even after `removeBatchEffect`, a strong batch effect still remains, for two reasons:
+
+- differences in variance between UMI and read counts
+- differences in cell type composition between data sets
+
+<div class="alert alert-warning">
+**Exercise:** 
 
 
+```r
+# How do I check what reduced dimension results are available?
+reducedDimNames(sceT)
+```
+
+```
+## [1] "PCA"  "TSNE"
+```
+
+We can get rid of the first effect to some extent using cosine normalization, but the second effect can't be resolved by _a priori_-defined linear models:
 
 
+```r
+together2 <- scran:::cosine.norm(together)
+rownames(together2) <- to.use
+corrected2 <- removeBatchEffect(together2, batch=batch)
+
+# Same as before...
+sceT2 <- SingleCellExperiment(list(exprs=corrected2))
+sceT2$Batch <- batch
+sceT2 <- runPCA(sceT2, exprs_values="exprs", method="irlba",
+    ncomponents=50, ntop=Inf)
+plotPCA(sceT2, colour_by="Batch")
+```
+
+<img src="answers_files/figure-html/unnamed-chunk-14-1.png" width="100%" />
+</div>
+
+## With MNN correction
+
+A more sophisticated approach involves using the "mutual nearest neighbors" correction method (see https://www.nature.com/articles/nbt.4091/figures/1).
+This involves finding pairs of cells - one per batch - where one cell in one batch is the nearest neighbour of a cell in the other batch, **and vice versa**.
+Such pairs are likely to represent cells of the same type or state; we can use this to compute correction vectors between the two batches.
 
 
+```r
+corrected <- mnnCorrect(counts(sceN)[to.use,], counts(sceP)[to.use,], sigma=0.05)
+```
+
+We can combine the corrected matrices into a single object:
 
 
+```r
+out <- do.call(cbind, corrected$corrected)
+colnames(out) <- NULL
+sceM <- SingleCellExperiment(list(exprs=out),
+    colData=DataFrame(Batch=batch))
+```
+
+... and we run a PCA using *[irlba](https://CRAN.R-project.org/package=irlba)* to get the first 50 PCs.
 
 
+```r
+sceM <- runPCA(sceM, exprs_values="exprs", method="irlba",
+    ncomponents=50, ntop=Inf)
+```
+
+Plotting it indicates that the batch effect has been removed from the first two PCs.
+In particular, the Paul dataset has been integrated into the Nestorowa dataset:
 
 
+```r
+plotPCA(sceM, colour_by="Batch")
+```
+
+<img src="answers_files/figure-html/unnamed-chunk-18-1.png" width="100%" />
+
+The corrected values can be used for clustering, but it not for DE as the values are not interpretable as log-counts.
+We suggest using the learnt structure (clusters) with the batch of origin as a blocking factor in the design matrix.
+
+<div class="alert alert-warning">
+**Exercise:** 
 
 
+```r
+# The _t_-SNE is a bit messier, but it shows the point:
+sceM <- runTSNE(sceM, use_dimred="PCA", perplexity=80)
+plotTSNE(sceM, colour_by="Batch")
+```
+
+<img src="answers_files/figure-html/unnamed-chunk-19-1.png" width="100%" />
+</div>
+
+# Session information
+
+
+```r
+sessionInfo()
+```
+
+```
+## R version 3.5.0 Patched (2018-04-30 r74681)
+## Platform: x86_64-pc-linux-gnu (64-bit)
+## Running under: Ubuntu 16.04.4 LTS
+## 
+## Matrix products: default
+## BLAS: /home/cri.camres.org/lun01/Software/R/R-3-5-branch-release/lib/libRblas.so
+## LAPACK: /home/cri.camres.org/lun01/Software/R/R-3-5-branch-release/lib/libRlapack.so
+## 
+## locale:
+##  [1] LC_CTYPE=en_GB.UTF-8       LC_NUMERIC=C              
+##  [3] LC_TIME=en_GB.UTF-8        LC_COLLATE=en_GB.UTF-8    
+##  [5] LC_MONETARY=en_GB.UTF-8    LC_MESSAGES=en_GB.UTF-8   
+##  [7] LC_PAPER=en_GB.UTF-8       LC_NAME=C                 
+##  [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+## [11] LC_MEASUREMENT=en_GB.UTF-8 LC_IDENTIFICATION=C       
+## 
+## attached base packages:
+## [1] parallel  stats4    stats     graphics  grDevices utils     datasets 
+## [8] methods   base     
+## 
+## other attached packages:
+##  [1] scater_1.8.0                ggplot2_2.2.1              
+##  [3] limma_3.36.1                scran_1.8.1                
+##  [5] SingleCellExperiment_1.2.0  SummarizedExperiment_1.10.1
+##  [7] DelayedArray_0.6.0          BiocParallel_1.14.1        
+##  [9] matrixStats_0.53.1          Biobase_2.40.0             
+## [11] GenomicRanges_1.32.2        GenomeInfoDb_1.16.0        
+## [13] IRanges_2.14.9              S4Vectors_0.18.1           
+## [15] BiocGenerics_0.26.0         knitr_1.20                 
+## [17] BiocStyle_2.8.0            
+## 
+## loaded via a namespace (and not attached):
+##  [1] viridis_0.5.1            dynamicTreeCut_1.63-1   
+##  [3] edgeR_3.22.1             viridisLite_0.3.0       
+##  [5] DelayedMatrixStats_1.2.0 shiny_1.0.5             
+##  [7] assertthat_0.2.0         statmod_1.4.30          
+##  [9] vipor_0.4.5              GenomeInfoDbData_1.1.0  
+## [11] yaml_2.1.19              pillar_1.2.2            
+## [13] backports_1.1.2          lattice_0.20-35         
+## [15] glue_1.2.0               digest_0.6.15           
+## [17] promises_1.0.1           XVector_0.20.0          
+## [19] colorspace_1.3-2         cowplot_0.9.2           
+## [21] htmltools_0.3.6          httpuv_1.4.3            
+## [23] Matrix_1.2-14            plyr_1.8.4              
+## [25] pkgconfig_2.0.1          bookdown_0.7            
+## [27] zlibbioc_1.26.0          xtable_1.8-2            
+## [29] scales_0.5.0             Rtsne_0.13              
+## [31] later_0.7.2              tibble_1.4.2            
+## [33] DT_0.4                   lazyeval_0.2.1          
+## [35] magrittr_1.5             mime_0.5                
+## [37] evaluate_0.10.1          beeswarm_0.2.3          
+## [39] FNN_1.1                  shinydashboard_0.7.0    
+## [41] tools_3.5.0              data.table_1.11.2       
+## [43] stringr_1.3.1            Rhdf5lib_1.2.0          
+## [45] munsell_0.4.3            locfit_1.5-9.1          
+## [47] irlba_2.3.2              bindrcpp_0.2.2          
+## [49] compiler_3.5.0           rlang_0.2.0             
+## [51] rhdf5_2.24.0             grid_3.5.0              
+## [53] RCurl_1.95-4.10          tximport_1.8.0          
+## [55] rjson_0.2.18             htmlwidgets_1.2         
+## [57] igraph_1.2.1             labeling_0.3            
+## [59] bitops_1.0-6             rmarkdown_1.9           
+## [61] gtable_0.2.0             reshape2_1.4.3          
+## [63] R6_2.2.2                 gridExtra_2.3           
+## [65] dplyr_0.7.4              bindr_0.1.1             
+## [67] rprojroot_1.3-2          stringi_1.2.2           
+## [69] ggbeeswarm_0.6.0         Rcpp_0.12.16            
+## [71] xfun_0.1
+```
