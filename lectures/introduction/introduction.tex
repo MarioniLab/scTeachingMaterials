@@ -102,12 +102,17 @@ $\quad\hookrightarrow$ CEL-seq2, STRT-seq, droplet-based methods
 \end{frame}
 
 \begin{frame}{Cell barcoding: the motivation}
-Modern Illumina sequencers have massive throughput:
+\begin{minipage}{0.59\textwidth}
+Modern Illumina sequencers:
 \begin{itemize}
 \item $> 3 \times 10^8$ reads per lane 
 \item 8 lanes per flow cell
 \item 2 flow cells per run (HiSeq 4000)
 \end{itemize}
+\end{minipage}
+\begin{minipage}{0.39\textwidth}
+\includegraphics[width=2in]{pics/illumina_flowcell.jpg}
+\end{minipage}
 \pause
 \begin{exampleblock}{Multiplexing - what and why?}
 Pool cDNA from many cells together, and sequence the pool.
