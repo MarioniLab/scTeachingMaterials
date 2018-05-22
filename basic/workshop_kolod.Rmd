@@ -504,7 +504,7 @@ How do we get the logcounts?
 ```
 </div>
 
-# Identifying HVGs from the normalized log-expression 
+# Modelling the technical component of variation
 
 We identify HVGs to focus on the genes that are driving heterogeneity across the population of cells.
 This requires estimation of the variance in expression for each gene, followed by decomposition of the variance into biological and technical components.
@@ -517,7 +517,6 @@ head(var.out)
 
 We can have a look at the fitted trend to the spike-in variances.
 Some tinkering may be required to get a good fit, usually by modifying `span=`.
-If you don't have spike-ins, you can fit the trend to the variances of the genes with `use.spikes=FALSE` (but this probably overestimates the technical component).
 
 ```{r hvgplothsc}
 plot(var.out$mean, var.out$total, pch=16, cex=0.6, xlab="Mean log-expression", 
@@ -527,16 +526,7 @@ cur.spike <- isSpike(sce)
 points(var.out$mean[cur.spike], var.out$total[cur.spike], col="red", pch=16)
 ```
 
-HVGs are identified as those genes with the highest biological components.
-This avoids prioritizing genes that are highly variable due to technical factors such as sampling noise during RNA capture and library preparation.
-
-```{r}
-hvg.out <- var.out[which(var.out$FDR <= 0.05),]
-hvg.out <- hvg.out[order(hvg.out$bio, decreasing=TRUE),] 
-nrow(hvg.out)
-write.table(file="hvg.tsv", hvg.out, sep="\t", quote=FALSE, col.names=NA)
-head(hvg.out)
-```
+If you don't have spike-ins, you can fit the trend to the variances of the genes with `use.spikes=FALSE` (but this probably overestimates the technical component).
 
 <div class="alert alert-warning">
 **Exercise:**
@@ -561,12 +551,17 @@ The idea is to discard later PCs that contain random technical noise, thus enric
 
 ```{r}
 sce <- denoisePCA(sce, technical=var.fit$trend)
-pcs <- reducedDim(sce) # stored in the object
-dim(pcs) # Cells are rows, PCs are columns
 sce
 ```
 
-We can have a look at the PCs directly, with pairwise plots between the first four PCs.
+We can have a look at the PCs directly:
+
+```{r}
+pcs <- reducedDim(sce) # stored in the object
+dim(pcs) # Cells are rows, PCs are columns
+```
+
+Creating pairwise plots between the first four PCs:
 
 ```{r pcaplothsc, fig.height=10, fig.width=10}
 plotPCA(sce, ncomponents=4, colour_by="Culture")
@@ -604,9 +599,15 @@ Here, we know that they're associated with the different culture conditions, but
 A quick and dirty approach with hierarchical clustering on Euclidean distances:
 
 ```{r}
-my.dist <- dist(pcs)
-my.tree <- hclust(my.dist, method="ward.D2")
-my.clusters <- cutree(my.tree, k=3)
+my.dist <- dist(pcs) # Making a distance matrix
+my.tree <- hclust(my.dist, method="ward.D2") # Building a tree
+plot(my.tree)
+```
+
+Cutting the tree into three clusters, and seeing how these correspond to the known culture conditions:
+
+```{r}
+my.clusters <- cutree(my.tree, k=3) 
 table(my.clusters, sce$Culture)
 ```
 
@@ -622,20 +623,15 @@ sce$Cluster <- factor(my.clusters)
 ```
 </div>
 
-We visualize the expression profiles of the top 100 HVGs with a heatmap.
-The average expression is subtracted from each gene so that we can better visualize differences between cells.
+We use a heatmap to visualize the expression profiles of the top 100 genes with the largest biological components.
 We see "blocks" in expression that correspond nicely to the known culture conditions.
 We possibly could have subclustered further, in which case we would subset and repeat the above process.
 
 ```{r}
-library(pheatmap)
-norm.exprs <- logcounts(sce)[rownames(hvg.out)[1:100],]
-norm.exprs <- norm.exprs - rowMeans(norm.exprs)
-all.cols <- scater:::.get_palette("tableau10medium")
-side.cols <- all.cols[sce$Culture]
-pheatmap(norm.exprs, cluster_cols=my.tree, 
-    annotation_col=as.data.frame(colData(sce)[,"Culture",drop=FALSE]), # Colouring by assigned cluster.
-    annotation_colors=list(Culture=setNames(all.cols[1:3], levels(sce$Culture))))
+plotHeatmap(sce, 
+    features=rownames(var.out)[order(var.out$bio)[1:100])],
+    cluster_cols=my.tree, colour_columns_by="Culture",
+    center=TRUE, symmetric=TRUE)
 ```
 
 When clustering, it is often useful to look at silhouette plots to assess cluster separatedness.
@@ -668,8 +664,7 @@ The tricky part is how to summarize results from many pairwise comparisons into 
 out <- findMarkers(sce, clusters=my.clusters)
 ```
 
-Consider cluster 2 and the set of genes with `Top <= X`.
-This is equal to the union of the top `X` genes from each pairwise comparison to another cluster.
+Consider the results of cluster 2:
 
 ```{r}
 marker.set <- out[[2]] # Marker set for cluster 2
@@ -679,7 +674,7 @@ head(marker.set)
 <div class="alert alert-warning">
 **Exercise:**
 
-What does this represent?
+What does the `Top` parameter represent?
 
 ```{r}
 marker.set[marker.set$Top <= 1,]
@@ -696,12 +691,10 @@ Try it yourself:
 We can visualize this more clearly with a heatmap of the top 20 genes.
 
 ```{r}
-top.markers <- rownames(marker.set)[marker.set$Top <= 10]
-top.exprs <- logcounts(sce)[top.markers,,drop=FALSE]
-heat.vals <- top.exprs - rowMeans(top.exprs)
-pheatmap(heat.vals, cluster_cols=my.tree, 
-    annotation_col=data.frame(Cluster=factor(my.clusters), row.names=colnames(sce)),
-    annotation_colors=list(Cluster=setNames(topo.colors(3), seq_along(unique(my.clusters)))))
+plotHeatmap(sce, 
+    features=rownames(marker.set)[marker.set$Top <= 10],
+    cluster_cols=my.tree, colour_columns_by="Cluster",
+    center=TRUE, symmetric=TRUE)
 ```
 
 A valid alternative strategy is to detect marker genes that are uniquely up-regulated or down-regulated in each cluster (set `pval.type="all"`).
