@@ -137,7 +137,7 @@ How do you get the counts?
 ```{r}
 # str() => structure of the object
 #H# str()
-#A# str(counts(se))
+#A# str(counts(sce))
 ```
 </div>
 
@@ -368,7 +368,7 @@ Phase assignment is difficult so I generally don't use the assignments for anyth
 
 ```{r}
 sce$cycle_phase <- assignments$phases
-tail(colnames(colData(se)))
+tail(colnames(colData(sce)))
 ```
 
 # Examining the genes
@@ -534,7 +534,7 @@ If you don't have spike-ins, you can fit the trend to the variances of the genes
 It's wise to check the distribution of expression values for the top HVGs to ensure that the variance estimate is not being dominated by one or two outlier cells.
 
 ```{r}
-top <- rownames(hvg.out)[1:10]
+top <- rownames(var.out)[order(var.out$bio, decreasing=TRUE)[1:10]]
 #H# plotExpression()
 #A# plotExpression(sce, features = top)
 ```
@@ -629,7 +629,7 @@ We possibly could have subclustered further, in which case we would subset and r
 
 ```{r}
 plotHeatmap(sce, 
-    features=rownames(var.out)[order(var.out$bio)[1:100])],
+    features=rownames(var.out)[order(var.out$bio, decreasing=TRUE)[1:100]],
     cluster_cols=my.tree, colour_columns_by="Culture",
     center=TRUE, symmetric=TRUE)
 ```
@@ -704,11 +704,13 @@ If each of these formed a cluster, and we only looked for unique genes, neither 
 
 # Additional comments
 
-It's a good idea to save the `SCESet` object to file with the `saveRDS` function.
+It's a good idea to save the `SingleCellExperiment` object to file with the `saveRDS` function.
 The object can then be easily restored into new R sessions using the `readRDS` function.
 
 ```{r}
 saveRDS(file="data.rds", sce)
+copy <- readRDS("data.rds")
+copy
 ```
 
 Data within it can be extracted and used for more complex analyses.
