@@ -56,21 +56,52 @@ head(count.data[,1:10])
 
 The original study used _HTSeq_ to assign reads to genes to obtain gene counts in each cell.
 It's worth pointing out that _HTSeq_ puts some gunk at the end of the count matrix, e.g., number of unassigned reads.
-We throw these out because they're not counts for actual genes.
 
 ```{r}
 tail(count.data[,1:10])
-count.data <- count.data[!grepl("_", rownames(count.data)),]
 ```
 
+We throw these out because they're not counts for actual genes.
+
+```{r}
+count.data <- count.data[!grepl("^_", rownames(count.data)),]
+tail(count.data[,1:10])
+```
+
+<div class="alert alert-warning">
+**Exercise:**
+
+Regular expressions: what does the caret do?
+
+```{r}
+grepl("^_", "__UNMAPPED")
+```
+
+```{r}
+grepl("_", "I_AM_A_GENE")
+```
+
+```{r}
+grepl("^_", "I_AM_A_GENE")
+```
+</div>
+
+
 ## Organizing the cell-based metadata
+
+We read in the metadata:
+
+```{r}
+metadata <- read.csv("metadata.csv", header=TRUE, row.names=1)
+head(metadata)
+```
 
 It's a good idea to check that the metadata actually matches up with the count data.
 The `match()` command below ensures that the ordering of metadata rows are the same as the ordering of count columns.
 
 ```{r}
-metadata <- read.csv("metadata.csv", header=TRUE, row.names=1)
-metadata <- metadata[match(colnames(count.data), rownames(metadata)),]
+m <- match(colnames(count.data), rownames(metadata))
+metadata <- metadata[m,]
 head(metadata)
 ```
 
@@ -87,17 +118,26 @@ sce
 <div class="alert alert-warning">
 **Exercise:** 
 
+What column metadata are available for this dataset?
+
 ```{r}
-# What metadata are available for this dataset?
 #H# sce
 #A# colData(sce)
 ```
 
+How can you get column metadata values for each cell?
+
 ```{r}
-# How can you get the metadata value for each cell?
 #H# sce
-#A# colData(sce)$Culture
 #A# sce$Culture
+```
+
+How do you get the counts?
+
+```{r}
+# str() => structure of the object
+#H# str()
+#A# str(counts(se))
 ```
 </div>
 
@@ -108,9 +148,8 @@ The `mapIds` call just ensures that only one gene symbol is used if two symbols 
 
 ```{r}
 library(org.Mm.eg.db)
-my.ids <- rownames(count.data)
-symbols <- mapIds(org.Mm.eg.db, keys=my.ids, keytype="ENSEMBL", column="SYMBOL")
-anno <- data.frame(ENSEMBL=my.ids, SYMBOL=symbols, stringsAsFactors=FALSE)
+symbols <- mapIds(org.Mm.eg.db, keys=rownames(sce), keytype="ENSEMBL", column="SYMBOL")
+anno <- data.frame(ENSEMBL=rownames(sce), SYMBOL=symbols, stringsAsFactors=FALSE)
 head(anno)
 ```
 
@@ -119,10 +158,10 @@ For Ensembl, this involves using the `r Biocpkg("TxDb.Mmusculus.UCSC.mm10.ensGen
 
 ```{r}
 library(TxDb.Mmusculus.UCSC.mm10.ensGene)
-location <- mapIds(TxDb.Mmusculus.UCSC.mm10.ensGene, keys=my.ids, 
+location <- mapIds(TxDb.Mmusculus.UCSC.mm10.ensGene, keys=rownames(sce),
     column="CDSCHROM", keytype="GENEID")
-anno$Chr <- location
-table(anno$Chr)
+anno$CHR <- location
+table(anno$CHR)
 ```
 
 We add all of this information to our `SingleCellExperiment` object.
@@ -135,14 +174,16 @@ rowData(sce)
 <div class="alert alert-warning">
 **Exercise:**
 
+How do you recover the row metadata for each gene?
+
 ```{r}
-# How do you recover the row metadata for each gene?
 #H# sce
 #A# head(rowData(sce)$SYMBOL)
 ```
 
+How do you add an extra row metadata variable?
+
 ```{r}
-# How do you add an extra row metadata variable?
 BLAH <- runif(nrow(sce))
 #H# rowData(sce)
 #A# rowData(sce)$BLAH <- BLAH
@@ -152,26 +193,19 @@ BLAH <- runif(nrow(sce))
 
 Identification of rows that correspond to spike-in transcripts is much easier, given that the ERCC spike-ins were used.
 (If you're doing this on the gene symbols, beware of the human gene family that also starts with "ERCC".)
+
+```{r}
+is.spike <- grepl("^ERCC", rownames(sce))
+sum(is.spike)
+```
+
 Note that we need to explicitly indicate that the ERCC set is, in fact, a spike-in set.
 This is necessary as spike-ins require special treatment in some downstream steps such as variance estimation and normalization.
 
 ```{r}
-is.spike <- grepl("^ERCC", my.ids)
-sum(is.spike)
 isSpike(sce, "ERCC") <- is.spike
 sce
 ```
-
-<div class="alert alert-warning">
-**Exercise:**
-
-```{r}
-# What does the caret do?
-grepl("^ERCC", "ERCC-001")
-#A# grepl("^ERCC", "TERCC-001")
-#A# grepl("^ERCC-[0-9]+", "ERCC-001")
-```
-</div>
 
 To make things easier to interpret, we'll use the gene symbols as row names.
 This requires some fiddling to avoid non-unique gene symbols (in which case we paste the Ensembl ID after it) or missing gene symbols (in which case we use the Ensembl ID).
@@ -202,21 +236,19 @@ We have a number of simple metrics that we use to assess quality:
 - Proportion of mitochondrial reads (if spike-ins are not available)
 
 Together, these catch failures in cDNA capture or sequencing, especially for the endogenous transcripts.
-For each cell, we calculate quality control metrics such as the total number of counts or the proportion of counts in mitochondrial genes or spike-in transcripts.
-These are stored in the `colData` of the `SingleCellExperiment` for future reference.
+Spike-in information is automatically extracted from the `SingleCellExperiment` object, but we need to explicitly specify genes on the mitochondrial genome:
 
 ```{r}
-library(scater)
-is.mito <- which(rowData(sce)$Chr == "chrM")
-sce <- calculateQCMetrics(sce, feature_controls=list(Mt=is.mito)) 
-head(colnames(colData(sce)))
+is.mito <- which(rowData(sce)$CHR == "chrM")
+is.mito
 ```
 
 <div class="alert alert-warning">
 **Exercise:**
 
+Why which()? See this neat trick:
+
 ```{r}
-# Why which()? See this neat trick:
 Y <- LETTERS[1:5]
 X <- c(TRUE, NA, FALSE, NA, TRUE)
 
@@ -224,18 +256,22 @@ Y[X]
 Y[which(X)]
 ```
 
-```{r}
-# Why use it with 'is.mito'?
-#H# rowData(sce)$Chr
-#A# sum(is.na(rowData(sce)$Chr))
-```
+Why use it with 'is.mito'?
 
 ```{r}
-# Existing ERCC information is used 'for free':
-#A# colnames(colData(sce))
+#H# rowData(sce)$CHR
+#A# sum(is.na(rowData(sce)$CHR))
 ```
-
 </div>
+
+For each cell, we calculate quality control metrics such as the total number of counts or the proportion of counts in mitochondrial genes or spike-in transcripts.
+These are stored in the `colData` of the `SingleCellExperiment` for future reference.
+
+```{r}
+library(scater)
+sce <- calculateQCMetrics(sce, feature_controls=list(Mt=is.mito)) 
+head(colnames(colData(sce)))
+```
 
 We create plots of these statistics below for each culture condition.
 
@@ -255,28 +291,23 @@ Cells with outlier values for each of the QC metrics are identified based on som
 low.lib <- isOutlier(sce$total_counts, log=TRUE, nmads=3, type="lower", batch=sce$Culture) # using log-values, here.
 low.nfeatures <- isOutlier(sce$total_features, log=TRUE, nmads=3, type="lower", batch=sce$Culture)
 high.ercc <- isOutlier(sce$pct_counts_ERCC, nmads=3, type="higher", batch=sce$Culture)
+data.frame(LowLib=sum(low.lib), LowNgenes=sum(low.nfeatures), HighSpike=sum(high.ercc))
 ```
 
 <div class="alert alert-warning">
 **Exercise:**
 
+What does `batch=` do in `isOutlier()`?
+
 ```{r}
-# What does batch= do in isOutlier()?
 x <- c(1,2,0,1,3,2,1,3,0,1,3,2,4,2,0,1,1,5,2,50,52,53,51)
 b <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2)
 
-#A# isOutlier(x)
-#A# isOutlier(x, batch=b)
-```
-
-```{r}
-# What is the minimum library size threshold?
-#H# retained <- 
-#A# retained <- sce[,!low.lib]
-plotColData(retained, x="Culture", y="log10_total_counts")
+#H# isOutlier(x)
+#A# isOutlier(x, batch=b) # last four are outliers
+#A# isOutlier(x, batch=b) # last four are not outliers
 ```
 </div>
-
 
 We only retain cells that pass all of the specified criteria.
 Of course, this involves some assumptions about independence from biology. 
@@ -284,8 +315,7 @@ Of course, this involves some assumptions about independence from biology.
 
 ```{r}
 discard <- low.lib | low.nfeatures | high.ercc
-data.frame(LowLib=sum(low.lib), LowNgenes=sum(low.nfeatures), HighSpike=sum(high.ercc), 
-    TotalLost=sum(discard), TotalLeft=sum(!discard))
+data.frame(TotalLost=sum(discard), TotalLeft=sum(!discard))
 ```
 
 We toss out the cells that we consider to be low-quality, and keep the rest.
@@ -303,12 +333,17 @@ We stick to the simple stuff because it's easier to interpret and troubleshoot.
 
 We use the `cyclone` method to classify cells into different cell cycle phases (http://dx.doi.org/10.1016/j.ymeth.2015.06.021).
 This was previously trained on some mouse data with known cell cycle classifications - we can get the trained classifier with `mm.pairs`.
-The method uses a randomization step, so we use `set.seed()` to obtain consistent results from different runs.
 
 ```{r}
 library(scran)
-set.seed(100)
 mm.pairs <- readRDS(system.file("exdata", "mouse_cycle_markers.rds", package="scran"))
+str(mm.pairs)
+```
+
+The method uses a randomization step, so we use `set.seed()` to obtain consistent results from different runs.
+
+```{r}
+set.seed(100)
 assignments <- cyclone(sce, mm.pairs, gene.names=rowData(sce)$ENSEMBL)
 plot(assignments$score$G1, assignments$score$G2M, xlab="G1 score", ylab="G2/M score", pch=16)
 ```
@@ -333,6 +368,7 @@ Phase assignment is difficult so I generally don't use the assignments for anyth
 
 ```{r}
 sce$cycle_phase <- assignments$phases
+tail(colnames(colData(se)))
 ```
 
 # Examining the genes
@@ -384,7 +420,7 @@ sce <- computeSumFactors(sce, min.mean=1)
 summary(sizeFactors(sce))
 ```
 
-/<div class="alert alert-warning">
+<div class="alert alert-warning">
 **Exercise:**
 
 It's a good idea to plot the size factors against the library sizes as a sanity check.
@@ -409,11 +445,11 @@ This is simply defined for each cell as the total count across all transcripts i
 
 ```{r}
 sce <- computeSpikeFactors(sce, type="ERCC", general.use=FALSE)
+summary(sizeFactors(sce, "ERCC"))
 ```
 
 These size factors are stored in a separate field of the `SingleCellExperiment` object by setting `general.use=FALSE` in `computeSpikeFactors`.
 This ensures that they will only be used with the spike-in transcripts but not the endogenous genes.
-Note that if you _do_ want to use the spike-in size factors to normalize all genes, set `general.use=TRUE` instead.
 
 <div class="alert alert-warning">
 **Exercise:**
@@ -425,6 +461,8 @@ The two sets of size factors tend to agree less due to the effects of heterogene
 #A# plot(sizeFactors(sce, 'ERCC'), sizeFactors(sce),
     log="xy", xlab="Size factor (ERCC)", ylab="Size factor (genes)")
 ```
+
+Note that if you _do_ want to use the spike-in size factors to normalize all genes, set `general.use=TRUE` instead.
 </div>
 
 ## Applying the size factors to normalize gene expression
@@ -435,6 +473,7 @@ Division of the counts for each gene by its appropriate size factor ensures that
 
 ```{r}
 sce <- normalize(sce)
+sce
 ```
 
 The log-transformation provides some measure of variance stabilization, so that high-abundance genes with large variances do not dominate downstream analyses.
@@ -443,22 +482,25 @@ The computed values are stored as an `logcounts` matrix in addition to the other
 <div class="alert alert-warning">
 **Exercise:**
 
+How do we find the available assays?
+
 ```{r}
-# How do we find the available assays?
 #H# sce
 #A# assayNames(sce)
 ```
 
-```{r}
-# How to we get a particular assay?
-#H# sce
-#A# dim(assay(sce, 'logcounts'))
-```
+How to we get a particular assay?
 
 ```{r}
-# How do we get the logcounts?
 #H# sce
-#A# dim(logcounts(sce))
+#A# str(assay(sce, 'logcounts'))
+```
+
+How do we get the logcounts?
+
+```{r}
+#H# sce
+#A# str(logcounts(sce))
 ```
 </div>
 
