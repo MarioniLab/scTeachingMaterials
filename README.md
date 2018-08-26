@@ -1,7 +1,7 @@
 # Teaching materials for single-cell RNA-seq data analysis
 
 This repository contains some standard teaching materials for scRNA-seq data analysis practicals.
-It currently relies on packages from Bioconductor version 3.6, and will be updated as required.
+It currently relies on packages from Bioconductor version 3.7, and will be updated as required.
 
 - `basic/` uses read count data with ERCC spike-ins from the Fluidigm system.
 This covers the basic concepts of scRNA-seq data analysis and takes approximately 2.5 hours to complete.
