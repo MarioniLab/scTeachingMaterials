@@ -1,9 +1,10 @@
 ---
 title: Analyzing single-cell RNA seq data from droplet-based protocols
 author: Aaron Lun
+date: "2018-08-26"
 output: 
-    BiocStyle::html_document:
-        fig_caption: false
+  BiocStyle::html_document:
+    fig_caption: false
 ---
 
 
@@ -30,8 +31,7 @@ biocLite(c("knitr", "BiocStyle", "EnsDb.Hsapiens.v86", "scater",
 ## Reading in a sparse matrix
 
 We are using a data set containing 3000 T cells from a healthy human donor, see https://support.10xgenomics.com/single-cell-gene-expression/datasets/2.1.0/t_3k.
-The data have already been run through the _CellRanger_ pipeline to yield unique molecular identifier (UMI) counts for each gene in each cell.
-
+The data have already been run through the _CellRanger_ pipeline to obtain unique molecular identifier (UMI) counts for each gene in each cell.
 
 We load in the raw count matrix using the `read10xCounts()` function from the *[DropletUtils](http://bioconductor.org/packages/DropletUtils)* package.
 This will create a `SingleCellExperiment` object where each column corresponds to a cell barcode.
@@ -79,6 +79,16 @@ class(counts(sce))
 
 
 ```r
+# How many non-zeroes are there?
+mean(counts(sce)!=0)
+```
+
+```
+## [1] 0.000289687
+```
+
+
+```r
 # What is the difference in memory usage?
 object.size(counts(sce))
 ```
@@ -118,16 +128,6 @@ head(Matrix::colSums(counts(sce)))
 ##                  0                  2                 22                  0 
 ## AAACCTGAGAAACGCC-1 AAACCTGAGAAAGTGG-1 
 ##                  0                  5
-```
-
-
-```r
-# How many non-zeroes are there?
-mean(counts(sce)!=0)
-```
-
-```
-## [1] 0.000289687
 ```
 </div>
 
@@ -285,7 +285,7 @@ table(fruits, people)
 
 # Quality control on the cells
 
-It is entirely possible for droplets to contain damaged or dying cells, which need to be removed prior to downstream analysis.
+It is possible for non-empty droplets to contain damaged or dying cells, which need to be removed prior to downstream analysis.
 We compute some QC metrics using `calculateQCMetrics()` and examine their distributions:
 
 
@@ -423,28 +423,9 @@ assayNames(sce)
 
 ```r
 # What do we do about negative size factors?
-clusters2 <- quickCluster(sce, method="igraph", min.mean=0.1, k=4)
-sce2 <- computeSumFactors(sce, min.mean=0.1, cluster=clusters2)
-summary(sizeFactors(sce2))
-```
-
-```
-##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##  0.2992  0.7947  0.9280  1.0000  1.0842 12.0512
-```
-
-```r
-sum(sizeFactors(sce2) < 0)
-```
-
-```
-## [1] 0
-```
-
-```r
-lib.factors <- librarySizeFactors(sce2)
-is.neg <- sizeFactors(sce2) < 0
-sizeFactors(sce2)[is.neg] <- lib.factors[is.neg]
+lib.factors <- librarySizeFactors(sce)
+is.neg <- sizeFactors(sce) < 0
+sizeFactors(sce)[is.neg] <- lib.factors[is.neg]
 ```
 </div>
 
@@ -554,7 +535,7 @@ plotTSNE(sce, colour_by="log10_total_features_by_counts")
 
 
 ```r
-# Do people remember how to look at the percentage of variance explained?
+# How do we check the percentage of variance explained?
 plot(attr(reducedDim(sce), "percentVar"), xlab="PC",
 	ylab="Proportion of variance explained")
 abline(v=ncol(reducedDim(sce, "PCA")), lty=2, col="red")
@@ -566,7 +547,7 @@ abline(v=ncol(reducedDim(sce, "PCA")), lty=2, col="red")
 # Clustering with graph-based methods
 
 We start by building a shared nearest neighbour graph, where each cells is connected to its neighbours by an edge.
-Unlike hierarchical clustering, we do not need to construct a distance matrix for a very large number of cells.
+Unlike hierarchical clustering, we do not need to construct a distance matrix for a large number of cells.
 
 
 ```r
@@ -575,9 +556,9 @@ snn.gr
 ```
 
 ```
-## IGRAPH e62734c U-W- 3148 226300 -- 
+## IGRAPH e4a4244 U-W- 3148 226300 -- 
 ## + attr: weight (e/n)
-## + edges from e62734c:
+## + edges from e4a4244:
 ##  [1] 1--  20 1--  46 1--  98 1-- 106 1-- 196 1-- 356 1-- 374 1-- 400 1-- 440
 ## [10] 1-- 446 1-- 452 1-- 497 1-- 531 1-- 571 1-- 586 1-- 590 1-- 592 1-- 607
 ## [19] 1-- 642 1-- 721 1-- 741 1-- 767 1-- 817 1-- 849 1-- 878 1-- 922 1-- 973
@@ -646,7 +627,7 @@ normalize
 ##     args <- grab_args()
 ##     layout_modifier(id = "normalize", args = args)
 ## }
-## <bytecode: 0x434daff8>
+## <bytecode: 0x3d1927d8>
 ## <environment: namespace:igraph>
 ```
 </div>
@@ -797,7 +778,7 @@ sessionInfo()
 ```
 ## R version 3.5.0 Patched (2018-04-30 r74681)
 ## Platform: x86_64-pc-linux-gnu (64-bit)
-## Running under: Ubuntu 16.04.4 LTS
+## Running under: Ubuntu 16.04.5 LTS
 ## 
 ## Matrix products: default
 ## BLAS: /home/cri.camres.org/lun01/Software/R/R-3-5-branch-release/lib/libRblas.so
@@ -816,65 +797,67 @@ sessionInfo()
 ## [8] methods   base     
 ## 
 ## other attached packages:
-##  [1] igraph_1.2.1                pheatmap_1.0.8             
-##  [3] scran_1.8.1                 EnsDb.Hsapiens.v86_2.99.0  
+##  [1] igraph_1.2.2                pheatmap_1.0.10            
+##  [3] scran_1.8.4                 EnsDb.Hsapiens.v86_2.99.0  
 ##  [5] ensembldb_2.4.1             AnnotationFilter_1.4.0     
-##  [7] GenomicFeatures_1.32.0      AnnotationDbi_1.42.1       
-##  [9] scater_1.8.0                ggplot2_2.2.1              
-## [11] Matrix_1.2-14               DropletUtils_1.0.0         
-## [13] SingleCellExperiment_1.2.0  SummarizedExperiment_1.10.0
-## [15] DelayedArray_0.6.0          matrixStats_0.53.1         
-## [17] Biobase_2.40.0              GenomicRanges_1.32.2       
-## [19] GenomeInfoDb_1.16.0         IRanges_2.14.5             
-## [21] S4Vectors_0.18.1            BiocGenerics_0.26.0        
-## [23] BiocParallel_1.14.1         knitr_1.20                 
-## [25] BiocStyle_2.8.0            
+##  [7] GenomicFeatures_1.32.2      AnnotationDbi_1.42.1       
+##  [9] scater_1.8.4                ggplot2_3.0.0              
+## [11] Matrix_1.2-14               DropletUtils_1.0.3         
+## [13] SingleCellExperiment_1.2.0  SummarizedExperiment_1.10.1
+## [15] DelayedArray_0.6.5          matrixStats_0.54.0         
+## [17] Biobase_2.40.0              GenomicRanges_1.32.6       
+## [19] GenomeInfoDb_1.16.0         IRanges_2.14.11            
+## [21] S4Vectors_0.18.3            BiocGenerics_0.26.0        
+## [23] BiocParallel_1.14.2         knitr_1.20                 
+## [25] BiocStyle_2.8.2            
 ## 
 ## loaded via a namespace (and not attached):
-##  [1] ProtGenerics_1.12.0      bitops_1.0-6            
-##  [3] bit64_0.9-7              RColorBrewer_1.1-2      
-##  [5] progress_1.1.2           httr_1.3.1              
-##  [7] rprojroot_1.3-2          dynamicTreeCut_1.63-1   
-##  [9] tools_3.5.0              backports_1.1.2         
-## [11] irlba_2.3.2              DT_0.4                  
-## [13] R6_2.2.2                 vipor_0.4.5             
-## [15] DBI_1.0.0                lazyeval_0.2.1          
-## [17] colorspace_1.3-2         gridExtra_2.3           
-## [19] prettyunits_1.0.2        curl_3.2                
-## [21] bit_1.1-12               compiler_3.5.0          
-## [23] labeling_0.3             rtracklayer_1.40.2      
-## [25] bookdown_0.7             scales_0.5.0            
-## [27] stringr_1.3.0            digest_0.6.15           
-## [29] Rsamtools_1.32.0         rmarkdown_1.9           
-## [31] XVector_0.20.0           pkgconfig_2.0.1         
-## [33] htmltools_0.3.6          highr_0.6               
-## [35] limma_3.36.1             htmlwidgets_1.2         
-## [37] rlang_0.2.0              RSQLite_2.1.1           
-## [39] FNN_1.1                  shiny_1.0.5             
-## [41] DelayedMatrixStats_1.2.0 bindr_0.1.1             
-## [43] dplyr_0.7.4              RCurl_1.95-4.10         
-## [45] magrittr_1.5             GenomeInfoDbData_1.1.0  
-## [47] Rcpp_0.12.16             ggbeeswarm_0.6.0        
-## [49] munsell_0.4.3            Rhdf5lib_1.2.0          
-## [51] viridis_0.5.1            stringi_1.2.2           
-## [53] yaml_2.1.19              edgeR_3.22.1            
-## [55] zlibbioc_1.26.0          Rtsne_0.13              
-## [57] rhdf5_2.24.0             plyr_1.8.4              
-## [59] grid_3.5.0               blob_1.1.1              
-## [61] promises_1.0.1           shinydashboard_0.7.0    
-## [63] lattice_0.20-35          cowplot_0.9.2           
-## [65] Biostrings_2.48.0        locfit_1.5-9.1          
-## [67] pillar_1.2.2             rjson_0.2.18            
-## [69] reshape2_1.4.3           biomaRt_2.36.0          
-## [71] XML_3.98-1.11            glue_1.2.0              
-## [73] evaluate_0.10.1          data.table_1.11.2       
-## [75] httpuv_1.4.2             gtable_0.2.0            
-## [77] assertthat_0.2.0         xfun_0.1                
-## [79] mime_0.5                 xtable_1.8-2            
-## [81] later_0.7.2              viridisLite_0.3.0       
-## [83] tibble_1.4.2             GenomicAlignments_1.16.0
-## [85] beeswarm_0.2.3           memoise_1.1.0           
-## [87] tximport_1.8.0           bindrcpp_0.2.2          
-## [89] statmod_1.4.30
+##  [1] Rtsne_0.13               ggbeeswarm_0.6.0        
+##  [3] colorspace_1.3-2         rjson_0.2.20            
+##  [5] dynamicTreeCut_1.63-1    rprojroot_1.3-2         
+##  [7] XVector_0.20.0           DT_0.4                  
+##  [9] bit64_0.9-7              tximport_1.8.0          
+## [11] Rsamtools_1.32.3         shinydashboard_0.7.0    
+## [13] shiny_1.1.0              compiler_3.5.0          
+## [15] httr_1.3.1               backports_1.1.2         
+## [17] assertthat_0.2.0         lazyeval_0.2.1          
+## [19] limma_3.36.2             later_0.7.3             
+## [21] htmltools_0.3.6          prettyunits_1.0.2       
+## [23] tools_3.5.0              bindrcpp_0.2.2          
+## [25] gtable_0.2.0             glue_1.3.0              
+## [27] GenomeInfoDbData_1.1.0   reshape2_1.4.3          
+## [29] dplyr_0.7.6              Rcpp_0.12.18            
+## [31] Biostrings_2.48.0        rtracklayer_1.40.5      
+## [33] DelayedMatrixStats_1.2.0 xfun_0.3                
+## [35] stringr_1.3.1            mime_0.5                
+## [37] irlba_2.3.2              statmod_1.4.30          
+## [39] XML_3.98-1.16            edgeR_3.22.3            
+## [41] zlibbioc_1.26.0          scales_1.0.0            
+## [43] hms_0.4.2                promises_1.0.1          
+## [45] ProtGenerics_1.12.0      rhdf5_2.24.0            
+## [47] RColorBrewer_1.1-2       yaml_2.2.0              
+## [49] curl_3.2                 memoise_1.1.0           
+## [51] gridExtra_2.3            biomaRt_2.36.1          
+## [53] stringi_1.2.4            RSQLite_2.1.1           
+## [55] highr_0.7                rlang_0.2.2             
+## [57] pkgconfig_2.0.2          bitops_1.0-6            
+## [59] evaluate_0.11            lattice_0.20-35         
+## [61] purrr_0.2.5              Rhdf5lib_1.2.1          
+## [63] bindr_0.1.1              GenomicAlignments_1.16.0
+## [65] htmlwidgets_1.2          labeling_0.3            
+## [67] cowplot_0.9.3            bit_1.1-14              
+## [69] tidyselect_0.2.4         plyr_1.8.4              
+## [71] magrittr_1.5             bookdown_0.7            
+## [73] R6_2.2.2                 DBI_1.0.0               
+## [75] pillar_1.3.0             withr_2.1.2             
+## [77] RCurl_1.95-4.11          tibble_1.4.2            
+## [79] crayon_1.3.4             rmarkdown_1.10          
+## [81] viridis_0.5.1            progress_1.2.0          
+## [83] locfit_1.5-9.1           grid_3.5.0              
+## [85] data.table_1.11.4        blob_1.1.1              
+## [87] FNN_1.1.2.1              digest_0.6.16           
+## [89] xtable_1.8-2             httpuv_1.4.5            
+## [91] munsell_0.5.0            beeswarm_0.2.3          
+## [93] viridisLite_0.3.0        vipor_0.4.5
 ```
 

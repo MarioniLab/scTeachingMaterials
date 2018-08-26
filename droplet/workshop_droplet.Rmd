@@ -35,8 +35,7 @@ biocLite(c("knitr", "BiocStyle", "EnsDb.Hsapiens.v86", "scater",
 ## Reading in a sparse matrix
 
 We are using a data set containing 3000 T cells from a healthy human donor, see https://support.10xgenomics.com/single-cell-gene-expression/datasets/2.1.0/t_3k.
-The data have already been run through the _CellRanger_ pipeline to yield unique molecular identifier (UMI) counts for each gene in each cell.
-
+The data have already been run through the _CellRanger_ pipeline to obtain unique molecular identifier (UMI) counts for each gene in each cell.
 
 We load in the raw count matrix using the `read10xCounts()` function from the `r Biocpkg("DropletUtils")` package.
 This will create a `SingleCellExperiment` object where each column corresponds to a cell barcode.
@@ -60,6 +59,11 @@ class(counts(sce))
 **Exercise:** 
 
 ```{r}
+# How many non-zeroes are there?
+#A# mean(counts(sce)!=0)
+```
+
+```{r}
 # What is the difference in memory usage?
 #H# object.size()
 #A# object.size(counts(sce))
@@ -72,11 +76,6 @@ class(counts(sce))
 #A# library(Matrix)
 #A# head(colSums(counts(sce)))
 #A# head(Matrix::colSums(counts(sce)))
-```
-
-```{r}
-# How many non-zeroes are there?
-#A# mean(counts(sce)!=0)
 ```
 </div>
 
@@ -184,7 +183,7 @@ people <- sample(c("Alex", "Brett", "Cameron"), 10, replace=TRUE)
 
 # Quality control on the cells
 
-It is entirely possible for droplets to contain damaged or dying cells, which need to be removed prior to downstream analysis.
+It is possible for non-empty droplets to contain damaged or dying cells, which need to be removed prior to downstream analysis.
 We compute some QC metrics using `calculateQCMetrics()` and examine their distributions:
 
 ```{r}
@@ -276,14 +275,9 @@ assayNames(sce)
 
 ```{r}
 # What do we do about negative size factors?
-clusters2 <- quickCluster(sce, method="igraph", min.mean=0.1, k=4)
-sce2 <- computeSumFactors(sce, min.mean=0.1, cluster=clusters2)
-summary(sizeFactors(sce2))
-sum(sizeFactors(sce2) < 0)
-
-lib.factors <- librarySizeFactors(sce2)
-is.neg <- sizeFactors(sce2) < 0
-sizeFactors(sce2)[is.neg] <- lib.factors[is.neg]
+lib.factors <- librarySizeFactors(sce)
+is.neg <- sizeFactors(sce) < 0
+sizeFactors(sce)[is.neg] <- lib.factors[is.neg]
 ```
 </div>
 
@@ -351,7 +345,7 @@ plotTSNE(sce, colour_by="log10_total_features_by_counts")
 **Exercise:** 
 
 ```{r}
-# Do people remember how to look at the percentage of variance explained?
+# How do we check the percentage of variance explained?
 #A# plot(attr(reducedDim(sce), "percentVar"), xlab="PC",
 #A# 	ylab="Proportion of variance explained")
 #A# abline(v=ncol(reducedDim(sce, "PCA")), lty=2, col="red")
@@ -361,7 +355,7 @@ plotTSNE(sce, colour_by="log10_total_features_by_counts")
 # Clustering with graph-based methods
 
 We start by building a shared nearest neighbour graph, where each cells is connected to its neighbours by an edge.
-Unlike hierarchical clustering, we do not need to construct a distance matrix for a very large number of cells.
+Unlike hierarchical clustering, we do not need to construct a distance matrix for a large number of cells.
 
 ```{r}
 snn.gr <- buildSNNGraph(sce, use.dimred="PCA")
