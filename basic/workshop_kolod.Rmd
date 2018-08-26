@@ -110,7 +110,8 @@ By storing everything together, we avoid book-keeping errors, e.g., when one mat
 
 ```{r}
 library(SingleCellExperiment)
-sce <- SingleCellExperiment(list(counts=as.matrix(count.data)), 
+sce <- SingleCellExperiment(
+    list(counts=as.matrix(count.data)), 
     colData=metadata)
 sce    
 ```
@@ -144,7 +145,7 @@ How do you get the counts?
 ## Adding gene-based annotation
 
 We pull out annotation from `r Biocpkg("org.Mm.eg.db")` to relate the ENSEMBL identifiers to the gene symbols.
-The `mapIds` call just ensures that only one gene symbol is used if two symbols map to the same Ensembl ID.
+The `mapIds()` function ensures that only one gene symbol is returned if two symbols map to the same Ensembl ID.
 
 ```{r}
 library(org.Mm.eg.db)
@@ -251,8 +252,10 @@ Why which()? See this neat trick:
 ```{r}
 Y <- LETTERS[1:5]
 X <- c(TRUE, NA, FALSE, NA, TRUE)
-
 Y[X]
+```
+
+```{r}
 Y[which(X)]
 ```
 
@@ -278,7 +281,7 @@ We create plots of these statistics below for each culture condition.
 ```{r qualplot, fig.height=10, fig.width=10}
 multiplot(cols=2,
     plotColData(sce, x="Culture", y="log10_total_counts"),
-    plotColData(sce, x="Culture", y="total_features"),
+    plotColData(sce, x="Culture", y="total_features_by_counts"),
     plotColData(sce, x="Culture", y="pct_counts_ERCC"),
     plotColData(sce, x="Culture", y="pct_counts_Mt")
 )
@@ -288,9 +291,15 @@ We assume that, in each culture condition, most cells are of high quality.
 Cells with outlier values for each of the QC metrics are identified based on some number of MADs from the median value.
 
 ```{r}
-low.lib <- isOutlier(sce$total_counts, log=TRUE, nmads=3, type="lower", batch=sce$Culture) # using log-values, here.
-low.nfeatures <- isOutlier(sce$total_features, log=TRUE, nmads=3, type="lower", batch=sce$Culture)
-high.ercc <- isOutlier(sce$pct_counts_ERCC, nmads=3, type="higher", batch=sce$Culture)
+low.lib <- isOutlier(sce$total_counts, log=TRUE, nmads=3, 
+    type="lower", batch=sce$Culture) # using log-values, here.
+
+low.nfeatures <- isOutlier(sce$total_features_by_counts, log=TRUE, 
+    nmads=3, type="lower", batch=sce$Culture)
+
+high.ercc <- isOutlier(sce$pct_counts_ERCC, nmads=3, 
+    type="higher", batch=sce$Culture)
+
 data.frame(LowLib=sum(low.lib), LowNgenes=sum(low.nfeatures), HighSpike=sum(high.ercc))
 ```
 
@@ -319,7 +328,7 @@ data.frame(TotalLost=sum(discard), TotalLeft=sum(!discard))
 ```
 
 We toss out the cells that we consider to be low-quality, and keep the rest.
-Here, most cells are retained (which makes sense, as some QC was already applied to the published data).
+Here, most cells are retained - which makes sense, as some QC was already applied to the published data.
 
 ```{r}
 sce <- sce[,!discard]
@@ -688,7 +697,7 @@ Try it yourself:
 ```
 </div>
 
-We can visualize this more clearly with a heatmap of the top 20 genes.
+We can visualize this more clearly with a heatmap of the top 10 genes for the pairwise comparisons.
 
 ```{r}
 plotHeatmap(sce, 

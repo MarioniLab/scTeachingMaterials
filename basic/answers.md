@@ -1,7 +1,7 @@
 ---
 title: A simple analysis of single-cell RNA seq data with Bioconductor packages
 author: Aaron Lun 
-date: "2018-05-30"
+date: "2018-08-26"
 output: 
   BiocStyle::html_document:
     fig_caption: false
@@ -261,7 +261,8 @@ By storing everything together, we avoid book-keeping errors, e.g., when one mat
 
 ```r
 library(SingleCellExperiment)
-sce <- SingleCellExperiment(list(counts=as.matrix(count.data)), 
+sce <- SingleCellExperiment(
+    list(counts=as.matrix(count.data)), 
     colData=metadata)
 sce    
 ```
@@ -350,7 +351,7 @@ str(counts(sce))
 ## Adding gene-based annotation
 
 We pull out annotation from *[org.Mm.eg.db](http://bioconductor.org/packages/org.Mm.eg.db)* to relate the ENSEMBL identifiers to the gene symbols.
-The `mapIds` call just ensures that only one gene symbol is used if two symbols map to the same Ensembl ID.
+The `mapIds()` function ensures that only one gene symbol is returned if two symbols map to the same Ensembl ID.
 
 
 ```r
@@ -464,19 +465,19 @@ rowData(sce)
 
 ```
 ## DataFrame with 38653 rows and 4 columns
-##                  ENSEMBL      SYMBOL         CHR               BLAH
-##              <character> <character> <character>          <numeric>
-## 1     ENSMUSG00000000001       Gnai3        chr3  0.185841772938147
-## 2     ENSMUSG00000000003        Pbsn        chrX 0.0107907785568386
-## 3     ENSMUSG00000000028       Cdc45       chr16   0.67441970971413
-## 4     ENSMUSG00000000031         H19          NA   0.47338613960892
-## 5     ENSMUSG00000000037       Scml2        chrX  0.531499963486567
-## ...                  ...         ...         ...                ...
-## 38649         ERCC-00164          NA          NA  0.155990440864116
-## 38650         ERCC-00165          NA          NA  0.615467643830925
-## 38651         ERCC-00168          NA          NA 0.0438267334830016
-## 38652         ERCC-00170          NA          NA  0.282002961263061
-## 38653         ERCC-00171          NA          NA  0.540163872996345
+##                  ENSEMBL      SYMBOL         CHR                BLAH
+##              <character> <character> <character>           <numeric>
+## 1     ENSMUSG00000000001       Gnai3        chr3   0.359623200260103
+## 2     ENSMUSG00000000003        Pbsn        chrX 0.00940048857592046
+## 3     ENSMUSG00000000028       Cdc45       chr16   0.127553243888542
+## 4     ENSMUSG00000000031         H19          NA   0.601544107077643
+## 5     ENSMUSG00000000037       Scml2        chrX 0.00960077461786568
+## ...                  ...         ...         ...                 ...
+## 38649         ERCC-00164          NA          NA   0.189530977746472
+## 38650         ERCC-00165          NA          NA   0.471271266462281
+## 38651         ERCC-00168          NA          NA   0.907886307919398
+## 38652         ERCC-00170          NA          NA   0.110930646536872
+## 38653         ERCC-00171          NA          NA   0.359001608099788
 ```
 </div>
 
@@ -581,13 +582,13 @@ Why which()? See this neat trick:
 ```r
 Y <- LETTERS[1:5]
 X <- c(TRUE, NA, FALSE, NA, TRUE)
-
 Y[X]
 ```
 
 ```
 ## [1] "A" NA  NA  "E"
 ```
+
 
 ```r
 Y[which(X)]
@@ -631,7 +632,7 @@ We create plots of these statistics below for each culture condition.
 ```r
 multiplot(cols=2,
     plotColData(sce, x="Culture", y="log10_total_counts"),
-    plotColData(sce, x="Culture", y="total_features"),
+    plotColData(sce, x="Culture", y="total_features_by_counts"),
     plotColData(sce, x="Culture", y="pct_counts_ERCC"),
     plotColData(sce, x="Culture", y="pct_counts_Mt")
 )
@@ -644,9 +645,15 @@ Cells with outlier values for each of the QC metrics are identified based on som
 
 
 ```r
-low.lib <- isOutlier(sce$total_counts, log=TRUE, nmads=3, type="lower", batch=sce$Culture) # using log-values, here.
-low.nfeatures <- isOutlier(sce$total_features, log=TRUE, nmads=3, type="lower", batch=sce$Culture)
-high.ercc <- isOutlier(sce$pct_counts_ERCC, nmads=3, type="higher", batch=sce$Culture)
+low.lib <- isOutlier(sce$total_counts, log=TRUE, nmads=3, 
+    type="lower", batch=sce$Culture) # using log-values, here.
+
+low.nfeatures <- isOutlier(sce$total_features_by_counts, log=TRUE, 
+    nmads=3, type="lower", batch=sce$Culture)
+
+high.ercc <- isOutlier(sce$pct_counts_ERCC, nmads=3, 
+    type="higher", batch=sce$Culture)
+
 data.frame(LowLib=sum(low.lib), LowNgenes=sum(low.nfeatures), HighSpike=sum(high.ercc))
 ```
 
@@ -699,7 +706,7 @@ data.frame(TotalLost=sum(discard), TotalLeft=sum(!discard))
 ```
 
 We toss out the cells that we consider to be low-quality, and keep the rest.
-Here, most cells are retained (which makes sense, as some QC was already applied to the published data).
+Here, most cells are retained - which makes sense, as some QC was already applied to the published data.
 
 
 ```r
@@ -748,7 +755,7 @@ assignments <- cyclone(sce, mm.pairs, gene.names=rowData(sce)$ENSEMBL)
 plot(assignments$score$G1, assignments$score$G2M, xlab="G1 score", ylab="G2/M score", pch=16)
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-31-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-32-1.png" width="100%" />
 
 Cells are classified as being in G1 phase if the G1 score is above 0.5 and greater than the G2/M score; 
     in G2/M phase if the G2/M score is above 0.5 and greater than the G1 score; 
@@ -798,7 +805,7 @@ hist(log10(ave.counts), breaks=100, main="", col="grey80",
     xlab=expression(Log[10]~"average count"))
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-34-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-35-1.png" width="100%" />
 
 We also look at the identities of the most highly expressed genes.
 This should generally be dominated by constitutively expressed transcripts, such as those for ribosomal or mitochondrial proteins.
@@ -809,7 +816,7 @@ The presence of other classes of features may be cause for concern if they are n
 plotHighestExprs(sce, n=50)
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-35-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-36-1.png" width="100%" />
 
 We can also have a look at the number of cells expressing each gene. 
 This is usually well-correlated to the average expression of each gene.
@@ -822,7 +829,7 @@ smoothScatter(log2(ave.counts), numcells,
     ylab="Number of expressing cells")
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-36-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-37-1.png" width="100%" />
 
 We discard genes that are not expressed in any cell, as these are obviously uninformative.
 
@@ -868,7 +875,7 @@ plot(sizeFactors(sce), sce$total_counts/1e6,
     log="xy", ylab="Library size (millions)", xlab="Size factor")
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-39-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-40-1.png" width="100%" />
 </div>
 
 For highly heterogeneous data sets with multiple cell types, we should cluster first with `quickCluster()`, and then normalize within each cluster with `cluster=`.
@@ -906,7 +913,7 @@ plot(sizeFactors(sce, 'ERCC'), sizeFactors(sce),
     log="xy", xlab="Size factor (ERCC)", ylab="Size factor (genes)")
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-41-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-42-1.png" width="100%" />
 
 Note that if you _do_ want to use the spike-in size factors to normalize all genes, set `general.use=TRUE` instead.
 </div>
@@ -1044,7 +1051,7 @@ top <- rownames(var.out)[order(var.out$bio, decreasing=TRUE)[1:10]]
 plotExpression(sce, features = top)
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-47-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-48-1.png" width="100%" />
 </div>
 
 An alternative approach is to use `technicalCV2`, which implements the method described by Brennecke _et al._ (http://dx.doi.org/10.1038/nmeth.2645).
@@ -1110,7 +1117,7 @@ prop.var <- attr(pcs, "percentVar")
 plot(prop.var, xlab="PC", ylab="Proportion of variance explained")
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-50-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-51-1.png" width="100%" />
 </div>
 
 We also use _t_-SNE, which is very good at displaying distinct clusters of cells and resolving complex structure.
@@ -1123,7 +1130,7 @@ sce <- runTSNE(sce, use_dimred="PCA", perplexity=30, rand_seed=100)
 plotTSNE(sce, colour_by="Culture")
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-51-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-52-1.png" width="100%" />
 
 However, _t_-SNE is stochastic and more complicated than PCA.
 Testing different settings of the "perplexity" parameter is recommended, as well as running multiple times to check that the conclusions are the same.
@@ -1142,7 +1149,7 @@ my.tree <- hclust(my.dist, method="ward.D2") # Building a tree
 plot(my.tree)
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-52-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-53-1.png" width="100%" />
 
 Cutting the tree into three clusters, and seeing how these correspond to the known culture conditions:
 
@@ -1171,7 +1178,7 @@ sce$Cluster <- factor(my.clusters)
 plotTSNE(sce, colour_by='Cluster')
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-54-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-55-1.png" width="100%" />
 </div>
 
 We use a heatmap to visualize the expression profiles of the top 100 genes with the largest biological components.
@@ -1186,7 +1193,7 @@ plotHeatmap(sce,
     center=TRUE, symmetric=TRUE)
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-55-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-56-1.png" width="100%" />
 
 When clustering, it is often useful to look at silhouette plots to assess cluster separatedness.
 Each bar corresponds to a cell, and is proportional to the difference in the average distances to all other cells in the same cluster versus cells in the nearest neighbouring cluster.
@@ -1320,7 +1327,7 @@ plotHeatmap(sce,
     center=TRUE, symmetric=TRUE)
 ```
 
-<img src="answers_files/figure-html/unnamed-chunk-60-1.png" width="100%" />
+<img src="answers_files/figure-html/unnamed-chunk-61-1.png" width="100%" />
 
 A valid alternative strategy is to detect marker genes that are uniquely up-regulated or down-regulated in each cluster (set `pval.type="all"`).
 However, be aware that no such genes may exist.
@@ -1372,7 +1379,7 @@ sessionInfo()
 ```
 ## R version 3.5.0 Patched (2018-04-30 r74681)
 ## Platform: x86_64-pc-linux-gnu (64-bit)
-## Running under: Ubuntu 16.04.4 LTS
+## Running under: Ubuntu 16.04.5 LTS
 ## 
 ## Matrix products: default
 ## BLAS: /home/cri.camres.org/lun01/Software/R/R-3-5-branch-release/lib/libRblas.so
@@ -1392,72 +1399,73 @@ sessionInfo()
 ## 
 ## other attached packages:
 ##  [1] cluster_2.0.7-1                       
-##  [2] scran_1.8.2                           
-##  [3] scater_1.8.0                          
-##  [4] ggplot2_2.2.1                         
+##  [2] scran_1.8.4                           
+##  [3] scater_1.8.4                          
+##  [4] ggplot2_3.0.0                         
 ##  [5] TxDb.Mmusculus.UCSC.mm10.ensGene_3.4.0
-##  [6] GenomicFeatures_1.32.0                
+##  [6] GenomicFeatures_1.32.2                
 ##  [7] org.Mm.eg.db_3.6.0                    
 ##  [8] AnnotationDbi_1.42.1                  
 ##  [9] SingleCellExperiment_1.2.0            
 ## [10] SummarizedExperiment_1.10.1           
-## [11] DelayedArray_0.6.0                    
-## [12] BiocParallel_1.14.1                   
-## [13] matrixStats_0.53.1                    
+## [11] DelayedArray_0.6.5                    
+## [12] BiocParallel_1.14.2                   
+## [13] matrixStats_0.54.0                    
 ## [14] Biobase_2.40.0                        
-## [15] GenomicRanges_1.32.3                  
+## [15] GenomicRanges_1.32.6                  
 ## [16] GenomeInfoDb_1.16.0                   
-## [17] IRanges_2.14.10                       
-## [18] S4Vectors_0.18.2                      
+## [17] IRanges_2.14.11                       
+## [18] S4Vectors_0.18.3                      
 ## [19] BiocGenerics_0.26.0                   
 ## [20] knitr_1.20                            
-## [21] BiocStyle_2.8.1                       
+## [21] BiocStyle_2.8.2                       
 ## 
 ## loaded via a namespace (and not attached):
 ##  [1] bitops_1.0-6             bit64_0.9-7             
-##  [3] RColorBrewer_1.1-2       progress_1.1.2          
+##  [3] RColorBrewer_1.1-2       progress_1.2.0          
 ##  [5] httr_1.3.1               rprojroot_1.3-2         
 ##  [7] dynamicTreeCut_1.63-1    tools_3.5.0             
 ##  [9] backports_1.1.2          DT_0.4                  
 ## [11] R6_2.2.2                 KernSmooth_2.23-15      
 ## [13] vipor_0.4.5              DBI_1.0.0               
 ## [15] lazyeval_0.2.1           colorspace_1.3-2        
-## [17] tidyselect_0.2.4         gridExtra_2.3           
-## [19] prettyunits_1.0.2        bit_1.1-13              
-## [21] compiler_3.5.0           labeling_0.3            
-## [23] rtracklayer_1.40.2       bookdown_0.7            
-## [25] scales_0.5.0             stringr_1.3.1           
-## [27] digest_0.6.15            Rsamtools_1.32.0        
-## [29] rmarkdown_1.9            XVector_0.20.0          
-## [31] pkgconfig_2.0.1          htmltools_0.3.6         
-## [33] limma_3.36.1             htmlwidgets_1.2         
-## [35] rlang_0.2.0              RSQLite_2.1.1           
-## [37] FNN_1.1                  shiny_1.1.0             
-## [39] DelayedMatrixStats_1.2.0 bindr_0.1.1             
-## [41] dplyr_0.7.5              RCurl_1.95-4.10         
-## [43] magrittr_1.5             GenomeInfoDbData_1.1.0  
-## [45] Matrix_1.2-14            Rcpp_0.12.17            
-## [47] ggbeeswarm_0.6.0         munsell_0.4.3           
-## [49] Rhdf5lib_1.2.1           viridis_0.5.1           
-## [51] stringi_1.2.2            yaml_2.1.19             
-## [53] edgeR_3.22.2             zlibbioc_1.26.0         
-## [55] Rtsne_0.13               rhdf5_2.24.0            
-## [57] plyr_1.8.4               grid_3.5.0              
-## [59] blob_1.1.1               promises_1.0.1          
-## [61] shinydashboard_0.7.0     lattice_0.20-35         
-## [63] cowplot_0.9.2            Biostrings_2.48.0       
-## [65] locfit_1.5-9.1           pillar_1.2.3            
-## [67] igraph_1.2.1             rjson_0.2.19            
-## [69] reshape2_1.4.3           biomaRt_2.36.1          
-## [71] XML_3.98-1.11            glue_1.2.0              
-## [73] evaluate_0.10.1          data.table_1.11.2       
-## [75] httpuv_1.4.3             gtable_0.2.0            
-## [77] purrr_0.2.4              assertthat_0.2.0        
-## [79] xfun_0.1                 mime_0.5                
-## [81] xtable_1.8-2             later_0.7.2             
-## [83] viridisLite_0.3.0        pheatmap_1.0.10         
-## [85] tibble_1.4.2             GenomicAlignments_1.16.0
-## [87] beeswarm_0.2.3           memoise_1.1.0           
-## [89] tximport_1.8.0           bindrcpp_0.2.2          
-## [91] statmod_1.4.30
+## [17] withr_2.1.2              tidyselect_0.2.4        
+## [19] gridExtra_2.3            prettyunits_1.0.2       
+## [21] bit_1.1-14               compiler_3.5.0          
+## [23] labeling_0.3             rtracklayer_1.40.5      
+## [25] bookdown_0.7             scales_1.0.0            
+## [27] stringr_1.3.1            digest_0.6.16           
+## [29] Rsamtools_1.32.3         rmarkdown_1.10          
+## [31] XVector_0.20.0           pkgconfig_2.0.2         
+## [33] htmltools_0.3.6          limma_3.36.2            
+## [35] htmlwidgets_1.2          rlang_0.2.2             
+## [37] RSQLite_2.1.1            FNN_1.1.2.1             
+## [39] shiny_1.1.0              DelayedMatrixStats_1.2.0
+## [41] bindr_0.1.1              dplyr_0.7.6             
+## [43] RCurl_1.95-4.11          magrittr_1.5            
+## [45] GenomeInfoDbData_1.1.0   Matrix_1.2-14           
+## [47] Rhdf5lib_1.2.1           Rcpp_0.12.18            
+## [49] ggbeeswarm_0.6.0         munsell_0.5.0           
+## [51] viridis_0.5.1            stringi_1.2.4           
+## [53] yaml_2.2.0               edgeR_3.22.3            
+## [55] zlibbioc_1.26.0          Rtsne_0.13              
+## [57] rhdf5_2.24.0             plyr_1.8.4              
+## [59] grid_3.5.0               blob_1.1.1              
+## [61] promises_1.0.1           shinydashboard_0.7.0    
+## [63] crayon_1.3.4             lattice_0.20-35         
+## [65] cowplot_0.9.3            Biostrings_2.48.0       
+## [67] hms_0.4.2                locfit_1.5-9.1          
+## [69] pillar_1.3.0             igraph_1.2.2            
+## [71] rjson_0.2.20             reshape2_1.4.3          
+## [73] biomaRt_2.36.1           XML_3.98-1.16           
+## [75] glue_1.3.0               evaluate_0.11           
+## [77] data.table_1.11.4        httpuv_1.4.5            
+## [79] gtable_0.2.0             purrr_0.2.5             
+## [81] assertthat_0.2.0         xfun_0.3                
+## [83] mime_0.5                 xtable_1.8-2            
+## [85] later_0.7.3              viridisLite_0.3.0       
+## [87] pheatmap_1.0.10          tibble_1.4.2            
+## [89] GenomicAlignments_1.16.0 beeswarm_0.2.3          
+## [91] memoise_1.1.0            tximport_1.8.0          
+## [93] bindrcpp_0.2.2           statmod_1.4.30
 ```
