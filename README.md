@@ -25,9 +25,11 @@ Required binary content should be hosted at https://jmlab-gitlab.cruk.cam.ac.uk/
 
 To compile the lectures, run `download.sh` to obtain the image files.
 It is then straightforward to run `pdflatex` on each set of slides.
+The source SVGs for some images are available in the `pics` subdirectory and can be modified as necessary.
 
 To obtain the data files for each practical, run `prepare.Rmd` in the corresponding directory.
 The practical itself can be executed with `test.sh`.
+This will update the `answers.md` file for a quick comparison to the reference results.
 
 To create a tarball for distribution:
 
