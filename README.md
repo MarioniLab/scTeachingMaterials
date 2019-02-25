@@ -23,6 +23,12 @@ Required binary content should be hosted at https://jmlab-gitlab.cruk.cam.ac.uk/
 
 # Instructions for instructors
 
+To compile the lectures, run `download.sh` to obtain the image files.
+It is then straightforward to run `pdflatex` on each set of slides.
+
+To obtain the data files for each practical, run `prepare.Rmd` in the corresponding directory.
+The practical itself can be executed with `test.sh`.
+
 To create a tarball for distribution:
 
 1. Clone this repository into a fresh directory.
