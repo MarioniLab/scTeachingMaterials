@@ -19,8 +19,21 @@ Do **not** upload slides here unless you are uploading the raw TeX files.
 Do **not** upload images here unless you are uploading SVG files.
 
 As a general rule, files should only be uploaded if they can be compiled anywhere.
+Required binary content should be hosted at https://jmlab-gitlab.cruk.cam.ac.uk/teaching/scTeachingFiles instead.
 
 # Instructions for instructors
+
+To create a tarball for distribution:
+
+1. Clone this repository into a fresh directory.
+2. Execute the top-level `build.sh`.
+This will download all necessary data files.
+It will also create two versions of each practical, one with the answers and one without.
+3. Delete any directories that will not be used in the workshop.
+
+It is **strongly** recommended that you try compiling each `answers.Rmd` file to ensure that the code is up to date!
+
+# Citation
 
 If you use these materials, please cite their ancestral source:
 
